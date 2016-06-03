@@ -1,26 +1,31 @@
 from __future__ import division
 import nltk
 import numpy as np
+import locale
 
-# Count proper nouns
-def is_nounPOS(pos):
-	return pos == "NNP"
-	# return pos[:2] == "NN"
-
-def proper_noun_count(text):
+def pos_count(text):
 	tokenized_text = nltk.word_tokenize(text)
 	tagged = nltk.pos_tag(tokenized_text)
-	tags = [i[1] for i in tagged]
-	counts = np.array([tags.count(i) for i in np.unique(tags)])
-	noun_count = np.sum(counts[np.array(map(is_nounPOS, np.unique(tags)))])
-	total_count = np.sum(counts)
-	return (100*noun_count/total_count)
+	tags = np.array([i[1] for i in tagged])
+	unique, counts = np.unique(tags, return_counts=True)
+	return unique, counts
 
-# fname = raw_input('Enter file to analyze: ')
-fname = 'sampletext'
+locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+
+fname = 'samplelist'
 f = open(fname, 'r')
 text = f.read()
 text = text.decode('utf-8')
-print "%.2f" % (proper_noun_count(text)) + "%" + " proper nouns"
+all_tags, all_data = pos_count(text)
+feature_tags = ['Numbers', 'Determiners', 'Proper Nouns']
+pos_tags = ['CD', 'DT', 'NNP']
+data = []
+size = np.sum(all_data)
+for i in range(len(pos_tags)):
+	index = np.argwhere(all_tags==pos_tags[i])
+	if (len(index > 0) and len(index[0] > 0)):
+		data.append(all_data[index[0][0]]/size)
+	else:
+		data.append(0)
+print np.asarray((feature_tags, data)).T
 f.close()
-
