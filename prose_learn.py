@@ -9,6 +9,7 @@ from sklearn import svm
 from sklearn import cross_validation
 from sklearn.grid_search import GridSearchCV
 from sklearn.datasets import load_svmlight_file
+from sklearn.externals import joblib
 
 feature_names = ['Numbers', 'Determiners', 'Proper Nouns']
 target_names = np.array(['List', 'Mixed', 'Prose', 'Poetry'])
@@ -20,13 +21,37 @@ df = pd.DataFrame(XY)
 df.columns= feature_names + ["Class"]
 df[feature_names] = df[feature_names].astype(float)
 
+#Define plot colors and options
+cmap_light = ListedColormap(['#FFAAAA', '#AAFFAA', '#AAAAFF', '#AFAFAF'])
+labels=['sr','og','^b', 'd']
+colors=['r','g','b', 'o']
 
-# colors=np.array([[1,0,0],[0,1,0],[0,0,1]])
-# ["r","g","b"]
-# i=0
+#Define classifier decision boundary plotting function
+def plot_classifier(x,y,clf,title):
 
-# def sigma(x):
-#     return 1/(1+np.exp(-x))
+    #Prepare grid for plotting decision surface
+    gx1, gx2 = np.meshgrid(np.arange(min(x[:,0]), max(x[:,0]),(max(x[:,0])-min(x[:,0]))/200.0 ),
+                         np.arange(min(x[:,1]), max(x[:,1]),(max(x[:,1])-min(x[:,1]))/200.0))
+    gx1l = gx1.flatten()
+    gx2l = gx2.flatten()
+    gx   = np.vstack((gx1l,gx2l)).T
+
+    #Compute a prediction for every point in the grid
+    gyhat = clf.predict(gx)
+    gyhat = gyhat.reshape(gx1.shape)
+
+    #Plot the results
+    for i in [0,1,2,3]:
+      plt.plot(x[y==i,0],x[y==i,1],labels[i]);
+    plt.xlabel('Feature 1');
+    plt.ylabel('Feature 2');
+    plt.pcolormesh(gx1,gx2,gyhat,cmap=cmap_light)
+    plt.colorbar();
+    plt.axis('tight');
+    plt.title(title);
+
+def sigma(x):
+    return 1/(1+np.exp(-x))
 
 # for c in target_names:
 #     thisdf = df[df["Class"]==c]
@@ -56,8 +81,18 @@ X2learn,X2test,Ylearn,Ytest = cross_validation.train_test_split(X2, Y2, test_siz
 
 #Do search for optimal parameters using 
 #5-fold cross validation on the learning set
-clf = GridSearchCV(svm.SVC(C=1), param_grid, cv=5)
+clf = GridSearchCV(svm.SVC(C=1, probability=True), param_grid, cv=5)
 clf.fit(X2learn, Ylearn)
+# joblib.dump(clf, 'Model/model.pkl')
+
+
+# plt.figure(1)
+# plot_classifier(X2learn,Ylearn,clf,"SVM with Learning Set")
+
+# #Plot the classification function with test set
+# plt.figure(2)
+# plot_classifier(X2test,Ytest,clf,"SVM with Test Set")
+# plt.show()
 
 #Print optimal parameter set
 print "Optimal Parameters:", clf.best_params_
@@ -67,4 +102,5 @@ Yhat = clf.predict(X2test)
 
 #Report the error rate
 Err  = 1-metrics.accuracy_score(Yhat,Ytest)
+print clf.predict_proba(X2test)
 print("Test Error Rate is: %.4f"%(Err,))
