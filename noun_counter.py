@@ -19,23 +19,25 @@ class Type:
 	LIST = 0
 
 save_classification = 0
-save_data = 1
-pg_start = 31
-pg_end = 297
+save_data = 0
+pg_start = 37
+pg_end = 42
 value = Type.POETRY
 
-tree = datahelper.load_xml_tree("/home/severhal/List-Tagger/Poetry/anthologyofmagaz1917brai_djvu.xml")
-name, nums, text = datahelper.tokenized_from_xml_range(tree, pg_start, pg_end)
+pages = datahelper.get_pages("/home/severhal/List-Tagger/Poetry/anthologyofmagaz1917brai_djvu.xml", pg_start, pg_end)
+name = datahelper.get_book_name(pages)
+nums, text = datahelper.tokenize_pages(pages)
 
 
 locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
-feature_names = ['Numbers', 'Determiners', 'Proper Nouns', 'Paragraph Length']
+feature_names = ['Numbers', 'Determiners', 'Proper Nouns', 'Paragraph Length', 'Rhyme']
 target_names = np.array(['List', 'Mixed', 'Prose', 'Poetry'])
 pos_tags = ['CD', 'DT', 'NNP']
 X1 = datahelper.get_data(text, pos_tags)
-X2 = datahelper.get_paragraph_length(tree, pg_start, pg_end)
-X = np.hstack((X1, X2))
-Y = np.ones(len(X), dtype=np.int) # if file is PROSE
+X2 = datahelper.get_paragraph_length(pages)
+X3 = datahelper.get_rhymes(pages, 2)
+X = np.hstack((X1, X2, X3))
+Y = np.ones(len(X), dtype=np.int)
 Y *= value
 
 # code to write data to classification file        ***DO NOT DELETE***
