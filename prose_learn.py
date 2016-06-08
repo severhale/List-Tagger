@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from pandas.tools.plotting import scatter_matrix, andrews_curves
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from scipy import linalg
@@ -10,8 +11,9 @@ from sklearn import cross_validation
 from sklearn.grid_search import GridSearchCV
 from sklearn.datasets import load_svmlight_file
 from sklearn.externals import joblib
+from sklearn.ensemble import RandomForestClassifier
 
-feature_names = ['Numbers', 'Determiners', 'Proper Nouns']
+feature_names = ['Numbers', 'Determiners', 'Proper Nouns', 'Paragraph Length']
 target_names = np.array(['List', 'Mixed', 'Prose', 'Poetry'])
 X, Y = load_svmlight_file("joined_data")
 X = X.toarray()
@@ -43,8 +45,8 @@ def plot_classifier(x,y,clf,title):
     #Plot the results
     for i in [0,1,2,3]:
       plt.plot(x[y==i,0],x[y==i,1],labels[i]);
-    plt.xlabel('Feature 1');
-    plt.ylabel('Feature 2');
+    plt.xlabel(feature_names[2]);
+    plt.ylabel(feature_names[3]);
     plt.pcolormesh(gx1,gx2,gyhat,cmap=cmap_light)
     plt.colorbar();
     plt.axis('tight');
@@ -52,6 +54,11 @@ def plot_classifier(x,y,clf,title):
 
 def sigma(x):
     return 1/(1+np.exp(-x))
+
+def get_feature_importance():
+    rf = RandomForestClassifier(n_estimators=1, criterion='entropy', max_features=2, max_depth=5, bootstrap=True, oob_score=True, n_jobs=2, random_state=33)
+    rf = rf.fit(X2learn, Ylearn)
+    return rf.feature_importances_
 
 # for c in target_names:
 #     thisdf = df[df["Class"]==c]
@@ -72,12 +79,12 @@ def sigma(x):
 param_grid = [{'C': [0.01,0.1,1, 10, 100], 'kernel': ['rbf'],'gamma': [0.1,1,10,100]}]
 
 #Select just the first two features
-# X2 = X[:,[0,1]]
+# X2 = X[:,[2,3]]
 X2 = X
 Y2 = Y
 
 #Creat a learning set/test set split
-X2learn,X2test,Ylearn,Ytest = cross_validation.train_test_split(X2, Y2, test_size=0.25, random_state=42)
+X2learn,X2test,Ylearn,Ytest = cross_validation.train_test_split(X2, Y2, test_size=0.25, random_state=22)
 
 #Do search for optimal parameters using 
 #5-fold cross validation on the learning set
@@ -101,6 +108,21 @@ print "Optimal Parameters:", clf.best_params_
 Yhat = clf.predict(X2test)
 
 #Report the error rate
-Err  = 1-metrics.accuracy_score(Yhat,Ytest)
-print clf.predict_proba(X2test)
+Err  = 1 - metrics.accuracy_score(Ytest, Yhat)
+F1 = metrics.f1_score(Ytest, Yhat, average=None)
+print "Predicted:",Yhat
+print "Actual:",Ytest
+print "F1: ",F1
 print("Test Error Rate is: %.4f"%(Err,))
+
+# # code to display data viz
+# XY = np.hstack((X,target_names[Y][:,np.newaxis]))
+# df = pd.DataFrame(XY)
+# df.columns= feature_names + ["Class"]
+# df[feature_names] = df[feature_names].astype(float)
+# print df.corr()
+# df.hist(bins=np.arange(0,1,0.005),sharex=True);
+# scatter_matrix(df, alpha=0.2, figsize=(8, 8), diagonal='none');
+# plt.figure()
+# andrews_curves(df, 'Class')
+# plt.show()

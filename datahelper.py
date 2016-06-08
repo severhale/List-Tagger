@@ -15,7 +15,8 @@ import os
 # unique contains all the different POS tags found
 # counts contains the counts of each unique POS tag in the order they are found in unique
 def pos_count(tokenized_text):
-	tagged = nltk.pos_tag(tokenized_text)
+	flat = [item for sublist in tokenized_text for item in sublist]
+	tagged = nltk.pos_tag(flat)
 	tags = np.array([i[1] for i in tagged])
 	unique, counts = np.unique(tags, return_counts=True)
 	return unique, counts
@@ -26,13 +27,15 @@ def load_text(fname):
 	f.close()
 	return text
 
+def load_xml_tree(fname):
+	return ET.fromstring(load_text(fname))
+
 # Parse pages from pg_start to pg_end inclusive
 # pg_start and pg_end are 1-indexed
-def tokenized_from_xml_range(fname, pg_start, pg_end):
+def tokenized_from_xml_range(tree, pg_start, pg_end):
 	pg_start -= 1
 	pg_end -= 1
-	tree = ET.fromstring(load_text(fname))
-	name = tree.find(".//OBJECT").find(".//PARAM").get('value')[:-10]
+	name = get_book_name(tree)
 	pg_iterator = tree.iter(tag="OBJECT")
 	i=0
 	while i<pg_start:
@@ -42,14 +45,29 @@ def tokenized_from_xml_range(fname, pg_start, pg_end):
 	page_nums = []
 	while i<=pg_end:
 		page = pg_iterator.next()
-		page_text = page.findall(".//WORD")
-		pages.append([j.text for j in page_text])
+		pages.append([])
+		line_iterator = page.iter(tag="LINE")
+		eop = False
+		while not eop:
+			try:
+				line = line_iterator.next()
+				line_text = [j.text for j in line.findall(".//WORD")]
+				pages[-1].append(line_text)
+			except StopIteration:
+				eop = True
+
+
+		# page_text = page.findall(".//WORD")
+		# pages.append([j.text for j in page_text])
 		pg_num = page.find(".//PARAM").get('value')[-9:-5]
-		# print "Page",pg_num
-		# print pages[-1]
+		print "Page",pg_num
+		print pages[-1]
 		page_nums.append(pg_num)
 		i += 1
 	return name,page_nums,pages
+
+def get_book_name(tree):
+	return tree.find(".//OBJECT").find(".//PARAM").get('value')[:-10]
 
 def tokenized_from_rawtext(fname):
 	f = open(fname, 'r')
@@ -58,6 +76,8 @@ def tokenized_from_rawtext(fname):
 	return nltk.word_tokenize(text)
 	f.close()
 
+# get data all parts of speech in pos_tags, as well as 
+# the frequency of lines that start with a capital letter
 def get_data(tokenized_text_array, pos_tags):
 	data = []
 	for i in range(len(tokenized_text_array)):
@@ -73,3 +93,20 @@ def get_data(tokenized_text_array, pos_tags):
 		data.append(page_data)
 	data = np.asarray(data)
 	return data
+
+def get_paragraph_length(tree, pg_start, pg_end):
+	pg_start -= 1
+	pg_end -= 1
+	pg_iterator = tree.iter(tag="OBJECT")
+	i = 0
+	paragraph_lengths = []
+	while(i<pg_start):
+		pg_iterator.next()
+		i += 1
+	while(i<=pg_end):
+		page = pg_iterator.next()
+		paragraphs = page.findall(".//PARAGRAPH")
+		pg_plengths = np.asarray([len(j.findall(".//WORD")) for j in paragraphs])
+		paragraph_lengths.append(pg_plengths.mean() if len(pg_plengths)>0 else 0)
+		i += 1
+	return np.resize(np.array(paragraph_lengths), (len(paragraph_lengths), 1))

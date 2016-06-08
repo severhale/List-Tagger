@@ -19,18 +19,22 @@ class Type:
 	LIST = 0
 
 save_classification = 0
-save_data = 0
-line_start = 335
-line_end = 336
-value = Type.MIXED
-name, nums, text = datahelper.tokenized_from_xml_range("/home/severhal/List-Tagger/Mixed/acd5869.0032.001.umich.edu_djvu.xml", line_start, line_end)
+save_data = 1
+pg_start = 31
+pg_end = 297
+value = Type.POETRY
+
+tree = datahelper.load_xml_tree("/home/severhal/List-Tagger/Poetry/anthologyofmagaz1917brai_djvu.xml")
+name, nums, text = datahelper.tokenized_from_xml_range(tree, pg_start, pg_end)
 
 
 locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
-feature_names = ['Numbers', 'Determiners', 'Proper Nouns']
+feature_names = ['Numbers', 'Determiners', 'Proper Nouns', 'Paragraph Length']
 target_names = np.array(['List', 'Mixed', 'Prose', 'Poetry'])
 pos_tags = ['CD', 'DT', 'NNP']
-X = datahelper.get_data(text, pos_tags)
+X1 = datahelper.get_data(text, pos_tags)
+X2 = datahelper.get_paragraph_length(tree, pg_start, pg_end)
+X = np.hstack((X1, X2))
 Y = np.ones(len(X), dtype=np.int) # if file is PROSE
 Y *= value
 
@@ -47,7 +51,7 @@ if save_data!=0:
 	nums = np.reshape(nums, (len(nums), 1))
 	final_table = np.hstack((nums, X))
 	f = open('training_data', 'ab')
-	np.savetxt(f, final_table, fmt=name + "_%s\t" + "1:%s\t2:%s\t3:%s")
+	np.savetxt(f, final_table, fmt=name + "_%s\t" + "1:%s\t2:%s\t3:%s\t4:%s")
 	f.close()
 
 # # code to display data viz
