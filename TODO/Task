@@ -1,0 +1,15 @@
+My Goal:
+Use machine learning to extract poems from text
+
+Possible Ideas:
+-- Mush all lines together into one long list of lines, perform analysis on all lines (fixes page break problem)
+-- Run pre-analysis and get pages which look like they contain poetry, mush together prev page to next page and find poems (less computation, could miss small poems amidst lots of text)
+
+-- Cluster analysis of lines with line number (from start of book) as a feature, so lines with similar features adjacent to each other get grouped together
+	- Would then do text classification to classify cluster as poem or not (straightforward ML problem)
+-- Train model to recognize start and end lines of poems, and to recognize outlier lines in the middle of poems. Then call a poem everything between a start line and the next end line, not including outlier lines
+	- Possibly two models, one to recognize start and end lines, and one to recognize outlier lines
+-- Conditional Random Field
+-- Two layered classifier
+	- Layer 1: Linewise classifier, looks at several lines before and after current line. Classify as Poetry or Other
+	- Layer 2: Looks at probability output of Layer 1, identifies what it believes to be poems

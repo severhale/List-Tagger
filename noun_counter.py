@@ -20,11 +20,11 @@ class Type:
 
 save_classification = 0
 save_data = 0
-pg_start = 37
-pg_end = 42
-value = Type.POETRY
+pg_start = 1
+pg_end = 2
+value = Type.LIST
 
-pages = datahelper.get_pages("/home/severhal/List-Tagger/Poetry/anthologyofmagaz1917brai_djvu.xml", pg_start, pg_end)
+pages = datahelper.get_pages("/home/severhal/List-Tagger/Mixed/acd5869.0032.001.umich.edu_djvu.xml", pg_start, pg_end)
 name = datahelper.get_book_name(pages)
 nums, text = datahelper.tokenize_pages(pages)
 
@@ -37,6 +37,8 @@ X1 = datahelper.get_data(text, pos_tags)
 X2 = datahelper.get_paragraph_length(pages)
 X3 = datahelper.get_rhymes(pages, 2)
 X = np.hstack((X1, X2, X3))
+np.set_printoptions(suppress=True)
+print X
 Y = np.ones(len(X), dtype=np.int)
 Y *= value
 
@@ -53,7 +55,7 @@ if save_data!=0:
 	nums = np.reshape(nums, (len(nums), 1))
 	final_table = np.hstack((nums, X))
 	f = open('training_data', 'ab')
-	np.savetxt(f, final_table, fmt=name + "_%s\t" + "1:%s\t2:%s\t3:%s\t4:%s")
+	np.savetxt(f, final_table, fmt=name + "_%s\t" + "1:%s\t2:%s\t3:%s\t4:%s\t5:%s")
 	f.close()
 
 # # code to display data viz
