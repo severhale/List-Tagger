@@ -21,7 +21,7 @@ def write_data(X, names):
 	f.close()
 
 feature_names = ["Left Margin", "Right Margin", "Top Margin", "Bottom Margin", "Syllables"]
-pages = poetryhelper.get_pages("../Mixed/bookman37unkngoog_djvu.xml", 50, 50)
+pages = poetryhelper.get_pages("../Mixed/elmcityreview08univ_djvu.xml", 76, 79)
 pg_nums = poetryhelper.get_page_numbers(pages)
 name = poetryhelper.get_book_name(pages)
 tags = []
@@ -39,13 +39,7 @@ for i in range(len(pg_nums)):
 		if inp == 'y':
 			state = 1
 		classify_line(name, num, j, state)
-datacopy = copy.deepcopy(data)
-data[0] += datacopy[0] + datacopy[1]
-data[-1] += datacopy[-2] + datacopy[-1]
-for i in range(1, len(datacopy) - 1):
-	data[i] += datacopy[i-1] + datacopy[i+1]
-data = np.asarray(data)
-write_data(data, tags)
+poetryhelper.save_data(data, tags)
 
 # for j in range(len(pages)):
 # 	page = pages[j]

@@ -94,7 +94,7 @@ def word_syls(word):
 					vow = False
 		return count
 
-def get_feature_vec(page, line_num):
+def get_feature_vec_pg(page, line_num):
 	lines = get_all_lines(page)
 	pg_dim = get_page_dimensions(page)
 	return get_feature_vec(lines, line_num, pg_dim)
@@ -115,21 +115,21 @@ def get_feature_vec(lines, line_num, pg_dim):
 				prev_line = lines[line_num - 1]
 				if len(prev_line) > 0:
 					prev_pos = get_word_pos(prev_line[0])
-					if prev_pos[1] > first_pos[1]:
-						t_margin = prev_pos[1] - first_pos[1]
+					if prev_pos[1] < first_pos[1]:
+						t_margin = first_pos[1] - prev_pos[1]
 					else:
 						found_prev = False
 				else:
 					found_prev = False
 			if not found_prev:
-				t_margin = pg_dim[1] - first_pos[1]
+				t_margin = first_pos[1]
 			found_next = True
 			if line_num < len(lines) - 1:
 				next_line = lines[line_num + 1]
 				if len(next_line) > 0:
 					next_pos = get_word_pos(next_line[0])
-					if next_pos[1] < first_pos[1]:
-						b_margin = first_pos[1] - next_pos[1]
+					if next_pos[1] > first_pos[1]:
+						b_margin = next_pos[1] - first_pos[1]
 					else:
 						found_next = False
 				else:
@@ -137,7 +137,16 @@ def get_feature_vec(lines, line_num, pg_dim):
 			else:
 				found_next = False
 			if not found_next:
-				b_margin = first_pos[1]
+				b_margin = pg_dim[1] - first_pos[1]
 			syllables = syllable_count(line)
 			vec = [l_margin/pg_dim[0], r_margin/pg_dim[0], t_margin/pg_dim[1], b_margin/pg_dim[1], syllables]
 	return vec
+
+def save_data(data, tags):
+	datacopy = copy.deepcopy(data)
+	data[0] += datacopy[0] + datacopy[1]
+	data[-1] += datacopy[-2] + datacopy[-1]
+	for i in range(1, len(datacopy) - 1):
+		data[i] += datacopy[i-1] + datacopy[i+1]
+	data = np.asarray(data)
+	write_data(data, tags)
