@@ -1,6 +1,8 @@
 from __future__ import division
 import xml.etree.ElementTree as ET
+import numpy as np
 import nltk
+import copy
 
 words = nltk.corpus.cmudict.dict()
 
@@ -94,16 +96,35 @@ def word_syls(word):
 					vow = False
 		return count
 
-def get_feature_vec_pg(page, line_num):
+def get_feature_vec_pg(parent_map, page, line_num):
 	lines = get_all_lines(page)
 	pg_dim = get_page_dimensions(page)
-	return get_feature_vec(lines, line_num, pg_dim)
+	return get_feature_vec(parent_map, lines, line_num, pg_dim)
+	
+def pos_count(line):
+	words = [i.text for i in line.findall(".//WORD")]
+	tagged = nltk.pos_tag(words)
+	tags = np.array(tagged)[:,1]
+	unique, counts = np.unique(tags, return_counts=True)
+	total = np.sum(counts)
+	counts = counts.astype(float)
+	counts /= total
+	result = []
+	for c in ['CD', 'DT', 'NNP']:
+		if c in unique:
+			result.append(counts[unique==c][0])
+		else:
+			result.append(0)
+	return result
 
-def get_feature_vec(lines, line_num, pg_dim):
-	vec = [0, 0, 0, 0, 0]
+def get_parent_map(pages):
+	return {c:p for page in pages for p in page.iter() for c in p}
+
+def get_feature_vec(parent_map, lines, line_num, pg_dim):
+	vec = [0, 0, 0, 0, 0, 0, 0, 0, 0]
 	if len(lines) > line_num and line_num >= 0:
 		line = lines[line_num]
-		if len(line) > 0:
+		if len(line.findall(".//WORD")) > 0:
 			first_pos = get_word_pos(line[0])
 			last_pos = get_word_pos(line[-1])
 			l_margin = first_pos[0]
@@ -139,14 +160,38 @@ def get_feature_vec(lines, line_num, pg_dim):
 			if not found_next:
 				b_margin = pg_dim[1] - first_pos[1]
 			syllables = syllable_count(line)
-			vec = [l_margin/pg_dim[0], r_margin/pg_dim[0], t_margin/pg_dim[1], b_margin/pg_dim[1], syllables]
+			para = parent_map[line]
+			plength = len(para.findall(".//WORD"))
+			pos = pos_count(line)
+			vec = [l_margin/pg_dim[0], r_margin/pg_dim[0], t_margin/pg_dim[1], b_margin/pg_dim[1], syllables, plength]
+			# vec = [syllables, plength]
+			vec += pos
 	return vec
 
-def save_data(data, tags):
+def getelement(arr, index):
+	if index < 0:
+		return arr[0]
+	elif index >= len(arr):
+		return arr[-1]
+	else:
+		return arr[index]
+
+def save_data(data, names, num_neighbors):
+	#### add surrounding line data to each element
 	datacopy = copy.deepcopy(data)
-	data[0] += datacopy[0] + datacopy[1]
-	data[-1] += datacopy[-2] + datacopy[-1]
-	for i in range(1, len(datacopy) - 1):
-		data[i] += datacopy[i-1] + datacopy[i+1]
+	for i in range(0, len(datacopy)):
+		for j in range(1, num_neighbors+1):
+			data[i] += getelement(datacopy, i+j) + getelement(datacopy, i-j)
 	data = np.asarray(data)
-	write_data(data, tags)
+
+	names = np.array(names)
+	names = np.reshape(names, (len(names), 1))
+	print data.shape
+	print names.shape
+	final_table = np.hstack((names, data))
+	fmt_string = "%s\t"
+	for i in range(1, data.shape[1] + 1):
+		fmt_string += str(i) + ":%s\t"
+	f = open('training_data', 'ab')
+	np.savetxt(f, final_table, fmt=fmt_string)
+	f.close()

@@ -7,21 +7,9 @@ def classify_line(book_name, pg_num, line_num, state):
 	f = open('classification', 'a')
 	f.write("%s_%s_%s %d\n" % (book_name, pg_num, line_num, state))
 	f.close()
-def write_data(X, names):
-	names = np.array(names)
-	names = np.reshape(names, (len(names), 1))
-	print X.shape
-	print names.shape
-	final_table = np.hstack((names, X))
-	fmt_string = "%s\t"
-	for i in range(1, X.shape[1] + 1):
-		fmt_string += str(i) + ":%s\t"
-	f = open('training_data', 'ab')
-	np.savetxt(f, final_table, fmt=fmt_string)
-	f.close()
 
-feature_names = ["Left Margin", "Right Margin", "Top Margin", "Bottom Margin", "Syllables"]
-pages = poetryhelper.get_pages("../Mixed/elmcityreview08univ_djvu.xml", 76, 79)
+feature_names = ["Left Margin", "Right Margin", "Top Margin", "Bottom Margin", "Syllables", "Paragraph Length", "Number", "Determiner", "Proper Noun"]
+pages = poetryhelper.get_pages("../All Text/anthologyofmagaz1917brai_djvu.xml", 400, 401)
 pg_nums = poetryhelper.get_page_numbers(pages)
 name = poetryhelper.get_book_name(pages)
 tags = []
@@ -39,7 +27,7 @@ for i in range(len(pg_nums)):
 		if inp == 'y':
 			state = 1
 		classify_line(name, num, j, state)
-poetryhelper.save_data(data, tags)
+poetryhelper.save_data(data, tags, 1)
 
 # for j in range(len(pages)):
 # 	page = pages[j]
