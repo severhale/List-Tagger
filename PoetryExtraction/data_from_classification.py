@@ -1,10 +1,14 @@
 import numpy as np
+import pickle
 from poetryhelper import *
 
 classification = open('classification', 'r')
 lines = classification.readlines()
 classification.close()
 targets = [i.split(' ')[0].split('_') for i in lines]
+
+freq_dict = pickle.load(open('worddict.p', 'rb'))
+dict_sum = sum(freq_dict.itervalues())
 
 arr = np.asarray(targets)
 books = np.unique(arr[:,0])
@@ -38,7 +42,7 @@ for book in books:
 		line_num = lineinfo[1]
 		pg = pages[nums.index(pg_num)]
 
-		data.append(get_feature_vec_pg(parent_map, pg, line_num))
+		data.append(get_feature_vec_pg(parent_map, pg, line_num, freq_dict, dict_sum))
 		str_pgnum = str(pg_num).zfill(4)
 		tags.append(book + '_' + str_pgnum + '_' + str(lineinfo[1]))
 

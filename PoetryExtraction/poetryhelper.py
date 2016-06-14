@@ -3,6 +3,8 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import nltk
 import copy
+import string
+import math
 
 words = nltk.corpus.cmudict.dict()
 
@@ -96,10 +98,10 @@ def word_syls(word):
 					vow = False
 		return count
 
-def get_feature_vec_pg(parent_map, page, line_num):
+def get_feature_vec_pg(parent_map, page, line_num, freq_dict, dict_sum):
 	lines = get_all_lines(page)
 	pg_dim = get_page_dimensions(page)
-	return get_feature_vec(parent_map, lines, line_num, pg_dim)
+	return get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
 	
 def pos_count(line):
 	words = [i.text for i in line.findall(".//WORD")]
@@ -120,7 +122,7 @@ def pos_count(line):
 def get_parent_map(pages):
 	return {c:p for page in pages for p in page.iter() for c in p}
 
-def get_feature_vec(parent_map, lines, line_num, pg_dim):
+def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec = [0, 0, 0, 0, 0, 0, 0, 0, 0]
 	if len(lines) > line_num and line_num >= 0:
 		line = lines[line_num]
@@ -162,11 +164,25 @@ def get_feature_vec(parent_map, lines, line_num, pg_dim):
 			syllables = syllable_count(line)
 			para = parent_map[line]
 			plength = len(para.findall(".//WORD"))
-			pos = pos_count(line)
 			vec = [l_margin/pg_dim[0], r_margin/pg_dim[0], t_margin/pg_dim[1], b_margin/pg_dim[1], syllables, plength]
-			# vec = [syllables, plength]
-			vec += pos
+			pos = pos_count(line)
+			prob = get_probability(line, freq_dict, dict_sum)
+			vec += pos + [prob]
+			# vec += pos
 	return vec
+
+def get_probability(line, freq_dict, dict_sum):
+	text = get_line_text(line)
+	eps = .01
+	total = 1
+	for w in line:
+		word = clean_word(w.text)
+		p = eps
+		if word in freq_dict:
+			p += (1 - eps) * freq_dict[word] / dict_sum
+		p = math.log(p)
+		total += p
+	return total
 
 def getelement(arr, index):
 	if index < 0:
@@ -183,6 +199,7 @@ def save_data(data, names, num_neighbors):
 		for j in range(1, num_neighbors+1):
 			data[i] += getelement(datacopy, i+j) + getelement(datacopy, i-j)
 	data = np.asarray(data)
+	####
 
 	names = np.array(names)
 	names = np.reshape(names, (len(names), 1))
@@ -195,3 +212,6 @@ def save_data(data, names, num_neighbors):
 	f = open('training_data', 'ab')
 	np.savetxt(f, final_table, fmt=fmt_string)
 	f.close()
+
+def clean_word(word):
+	return word.strip(string.punctuation + string.whitespace).lower()

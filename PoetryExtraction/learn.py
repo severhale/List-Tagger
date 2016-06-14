@@ -39,7 +39,7 @@ names = np.asarray(names)
 param_grid = [{'C': [0.01,0.1,1, 10], 'kernel': ['rbf'],'gamma': [0.1,1,10]}]
 Xlearn,Xtest,Ylearn,Ytest,names_learn,names_test = cross_validation.train_test_split(X, Y, names, test_size=0.25, random_state=random.randint(1, 100))
 # clf = GridSearchCV(svm.SVC(C=1, probability=True), param_grid, cv=2)
-clf = RandomForestClassifier(n_estimators=1, criterion='entropy', max_features=2, max_depth=5, bootstrap=True, oob_score=True, n_jobs=2, random_state=random.randint(1, 100))
+clf = RandomForestClassifier(n_estimators=20, criterion='entropy', max_features='auto', bootstrap=True, oob_score=True, n_jobs=2, random_state=random.randint(1, 100))
 # clf = GridSearchCV(clf, param_grid, cv=2)
 clf.fit(Xlearn, Ylearn)
 print clf.feature_importances_
