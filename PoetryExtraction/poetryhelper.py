@@ -17,6 +17,10 @@ def load_text(fname):
 def load_xml_tree(fname):
 	return ET.fromstring(load_text(fname))
 
+def get_pg_iterator(fname):
+	tree = load_xml_tree(fname)
+	return tree.iter(tag="OBJECT")
+
 def get_pages(fname, pg_start, pg_end):
 	pg_start -= 1
 	pg_end -= 1
@@ -43,6 +47,9 @@ def get_page_numbers(pages):
 		pg_num = page.find(".//PARAM").get('value')[-9:-5]
 		page_nums.append(pg_num)
 	return page_nums
+
+def get_page_number(page):
+	return page.find(".//PARAM").get('value')[-9:-5]
 
 def get_book_name(pages):
 	return pages[0].find(".//PARAM").get('value')[:-10]
@@ -104,15 +111,16 @@ def get_feature_vec_pg(parent_map, page, line_num, freq_dict, dict_sum):
 	return get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
 	
 def pos_count(line):
-	words = [i.text for i in line.findall(".//WORD")]
-	tagged = nltk.pos_tag(words)
+	words = ' '.join([i.text for i in line.findall(".//WORD")])
+	tok = nltk.word_tokenize(words)
+	tagged = nltk.pos_tag(tok)
 	tags = np.array(tagged)[:,1]
 	unique, counts = np.unique(tags, return_counts=True)
 	total = np.sum(counts)
 	counts = counts.astype(float)
 	counts /= total
 	result = []
-	for c in ['CD', 'DT', 'NNP']:
+	for c in ['CD', 'DT', 'NNP', 'JJ', 'NN']:
 		if c in unique:
 			result.append(counts[unique==c][0])
 		else:
@@ -122,8 +130,40 @@ def pos_count(line):
 def get_parent_map(pages):
 	return {c:p for page in pages for p in page.iter() for c in p}
 
+def easy_feature_table(pages, freq_dict):
+	parent_map = get_parent_map(pages)
+	dict_sum = sum(freq_dict.itervalues())
+	tags, data = get_feature_table(parent_map, pages, freq_dict, dict_sum)
+	return tags, data
+
+def get_feature_table(parent_map, pages, freq_dict, dict_sum):
+	data = []
+	tags = []
+	for i in range(len(pages)):
+	 	ltags, ldata = get_feature_table_pg(parent_map, pages[i], freq_dict, dict_sum)
+		if len(ldata) > 0:
+			data += ldata
+			tags += ltags
+	return np.asarray(tags), np.vstack(data)
+
+def get_feature_table_pg(parent_map, page, freq_dict, dict_sum):
+	lines = get_all_lines(page)
+	pg_dim = get_page_dimensions(page)
+	name = get_book_name([page])
+	num = get_page_number(page)
+	# if len(lines) == 0:
+	# 	data = np.array([get_feature_vec(parent_map, [], -1, pg_dim, freq_dict, dict_sum)])
+	# 	tags = []
+	# else:
+	tags = []
+	data = []
+	for i in range(len(lines)):
+		tags.append("%s_%s_%d" % (name, num, i))
+		data.append(get_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
+	return tags, data
+
 def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
-	vec = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+	vec = [0] * 12  #### keep this updated with num features
 	if len(lines) > line_num and line_num >= 0:
 		line = lines[line_num]
 		if len(line.findall(".//WORD")) > 0:
@@ -192,14 +232,21 @@ def getelement(arr, index):
 	else:
 		return arr[index]
 
-def save_data(data, names, num_neighbors):
+def concat_neighbors(data, num_neighbors):
+	print data.shape
+	data = data.tolist()
 	#### add surrounding line data to each element
 	datacopy = copy.deepcopy(data)
 	for i in range(0, len(datacopy)):
 		for j in range(1, num_neighbors+1):
 			data[i] += getelement(datacopy, i+j) + getelement(datacopy, i-j)
 	data = np.asarray(data)
+	print data.shape
+	return data
 	####
+
+def save_data(data, names, num_neighbors):
+	data = concat_neighbors(data, num_neighbors)
 
 	names = np.array(names)
 	names = np.reshape(names, (len(names), 1))
@@ -209,9 +256,13 @@ def save_data(data, names, num_neighbors):
 	fmt_string = "%s\t"
 	for i in range(1, data.shape[1] + 1):
 		fmt_string += str(i) + ":%s\t"
-	f = open('training_data', 'ab')
+	f = open('training_data', 'wb')
 	np.savetxt(f, final_table, fmt=fmt_string)
 	f.close()
 
 def clean_word(word):
 	return word.strip(string.punctuation + string.whitespace).lower()
+
+def parse_tag(tag):
+	result = tag.split('_')
+	return result[-3], result[-2], result[-1]

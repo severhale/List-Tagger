@@ -4,6 +4,7 @@ from sklearn import svm
 from sklearn import cross_validation
 from sklearn.grid_search import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.externals import joblib
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import numpy as np
@@ -36,7 +37,7 @@ names = np.asarray(names)
 
 #### 5-fold crossvalidation w/rbf model
 # param_grid = [{'C':[10], 'kernel': ['linear']}]
-param_grid = [{'C': [0.01,0.1,1, 10], 'kernel': ['rbf'],'gamma': [0.1,1,10]}]
+# param_grid = [{'C': [0.01,0.1,1, 10], 'kernel': ['rbf'],'gamma': [0.1,1,10]}]
 Xlearn,Xtest,Ylearn,Ytest,names_learn,names_test = cross_validation.train_test_split(X, Y, names, test_size=0.25, random_state=random.randint(1, 100))
 # clf = GridSearchCV(svm.SVC(C=1, probability=True), param_grid, cv=2)
 clf = RandomForestClassifier(n_estimators=20, criterion='entropy', max_features='auto', bootstrap=True, oob_score=True, n_jobs=2, random_state=random.randint(1, 100))
@@ -71,3 +72,5 @@ print confusion
 # plt.figure()
 # andrews_curves(df, 'Class')
 # plt.show()
+
+joblib.dump(clf, "Model/model.pkl")
