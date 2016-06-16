@@ -16,7 +16,7 @@ else:
 # s = sorted(d.items(), key=operator.itemgetter(1), reverse=True)
 # for i in s:
 # 	try:
-# 		print i[0].encode('utf-8'),':',i[1]/total
+# 		print i[0].encode('utf-8'),':',i[1]
 # 	except:
 # 		continue
 
@@ -29,17 +29,17 @@ else:
 # words = []
 # for page in pages:
 # 	words += [i.text for i in page.findall(".//WORD")]
-for i in os.listdir(os.getcwd() + "/../Poetry"):
-	words = []
-	with open("../Poetry/" + i, 'r') as f:
-		words = f.read().split()
-	for w in words:
-		word = clean_word(w)
-		if not word in d:
-			d[word] = 1
-		else:
-			d[word] += 1
 
-# # print d
+# for i in os.listdir(os.getcwd() + "/../Poetry"):
+# 	words = []
+# 	with open("../Poetry/" + i, 'r') as f:
+# 		words = f.read().split()
+# 	for w in words:
+# 		word = clean_word(w)
+# 		if not word in d:
+# 			d[word] = 1
+# 		else:
+# 			d[word] += 1
 
-pickle.dump(d, open(dictname, 'wb'))
+
+# pickle.dump(d, open(dictname, 'wb'))

@@ -5,7 +5,7 @@ def classify_line(book_name, pg_num, line_num, state):
 	f.write("%s_%s_%s %d\n" % (book_name, pg_num, line_num, state))
 	f.close()
 
-pages = poetryhelper.get_pages("../All Text/poemsofwaltwhit00whit_djvu.xml", 25, 27)
+pages = poetryhelper.get_pages("../All Text/irresistiblecurr00loweiala_djvu.xml", 150, 152)
 pg_nums = poetryhelper.get_page_numbers(pages)
 name = poetryhelper.get_book_name(pages)
 for i in range(len(pg_nums)):
