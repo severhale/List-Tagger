@@ -40,11 +40,11 @@ for book in books:
 	for lineinfo in lines:
 		pg_num = lineinfo[0]
 		line_num = lineinfo[1]
-		pg = pages[nums.index(pg_num)]
+		pg_index = nums.index(pg_num)
 
-		d = get_feature_vec_pg(parent_map, pg, line_num, freq_dict, dict_sum)
+		d = get_feature_vec_pg(parent_map, pages, pg_index, line_num, freq_dict, dict_sum)
 		data.append(d)
 		str_pgnum = str(pg_num).zfill(4)
 		tags.append(book + '_' + str_pgnum + '_' + str(lineinfo[1]))
 data = np.asarray(data)
-save_data(data, tags, 2)
+save_data(data, tags)

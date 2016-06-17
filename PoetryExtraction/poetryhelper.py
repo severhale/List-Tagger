@@ -105,11 +105,7 @@ def word_syls(word):
 					vow = False
 		return count
 
-def get_feature_vec_pg(parent_map, page, line_num, freq_dict, dict_sum):
-	lines = get_all_lines(page)
-	pg_dim = get_page_dimensions(page)
-	return get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
-	
+
 def pos_count(line):
 	words = ' '.join([i.text for i in line.findall(".//WORD")])
 	tok = nltk.word_tokenize(words)
@@ -159,12 +155,29 @@ def get_feature_table_pg(parent_map, page, freq_dict, dict_sum):
 	data = []
 	for i in range(len(lines)):
 		tags.append("%s_%s_%d" % (name, num, i))
-		data.append(get_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
-	return tags, data
+		data.append(get_single_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
+	result = [lsum([getelement(data, j) for j in range(i-2,i+3)]) for i in range(len(data))]
+	return tags, result
 
-def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
-	vec = [0] * 12  #### keep this updated with num features
-	if len(lines) > line_num and line_num >= 0:
+def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_sum):
+	result = []
+	page = pages[page_index]
+	lines = get_all_lines(pages[page_index])
+	pg_dim = get_page_dimensions(page)
+	prev_lines=[]
+	next_lines=[]
+	if line_num < 2:
+		if page_index > 0:
+			prev_lines = get_all_lines(pages[page_index-1])
+	if line_num > len(lines)-3:
+		if page_index < len(pages)-1:
+			next_lines = get_all_lines(pages[page_index-1])
+	result = get_feature_vec(parent_map, prev_lines+lines+next_lines, line_num+len(prev_lines), pg_dim, freq_dict, dict_sum)
+	return result
+
+def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
+	vec = [0] * 12
+	if line_num < len(lines) and line_num >= 0:
 		line = lines[line_num]
 		if len(line.findall(".//WORD")) > 0:
 			first_pos = get_word_pos(line[0])
@@ -208,8 +221,19 @@ def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 			pos = pos_count(line)
 			prob = get_probability(line, freq_dict, dict_sum)
 			vec += pos + [prob]
-			# vec += pos
 	return vec
+	
+def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
+	totalvec = []
+	for index in range(line_num-2, line_num+3):
+		i=index
+		if index<0:
+			i=0
+		elif index>=len(lines):
+			index=len(lines)-1
+		vec = get_single_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum)
+		totalvec += vec
+	return totalvec
 
 def get_probability(line, freq_dict, dict_sum):
 	text = get_line_text(line)
@@ -232,22 +256,21 @@ def getelement(arr, index):
 	else:
 		return arr[index]
 
+
+### NOTE: ONLY WORKS ON CONTIGUOUS DATA!!!!!!!!!!
 def concat_neighbors(data, num_neighbors):
 	print data.shape
 	data = data.tolist()
 	#### add surrounding line data to each element
 	datacopy = copy.deepcopy(data)
 	for i in range(0, len(datacopy)):
-		for j in range(1, num_neighbors+1):
-			data[i] += getelement(datacopy, i+j) + getelement(datacopy, i-j)
+		for j in range(i-2,i+3):
+			data[i] += getelement(datacopy, j) + getelement(datacopy, j)
 	data = np.asarray(data)
 	print data.shape
 	return data
-	####
 
-def save_data(data, names, num_neighbors):
-	data = concat_neighbors(data, num_neighbors)
-
+def save_data(data, names):
 	names = np.array(names)
 	names = np.reshape(names, (len(names), 1))
 	print data.shape
@@ -266,3 +289,9 @@ def clean_word(word):
 def parse_tag(tag):
 	result = tag.split('_')
 	return result[-3], result[-2], result[-1]
+
+def lsum(list):
+	result = []
+	for l in list:
+		result += l
+	return result
