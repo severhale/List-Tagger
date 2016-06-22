@@ -5,22 +5,27 @@ import nltk
 import copy
 import string
 import math
+import random
 
 words = nltk.corpus.cmudict.dict()
 
+# Load all text from file as an array of strings
 def load_text(fname):
 	f = open(fname, 'r')
 	text = f.read()
 	f.close()
 	return text
 
+# Get the full XML tree from DjVu file
 def load_xml_tree(fname):
 	return ET.fromstring(load_text(fname))
 
+# Get an iterator over all page XML objects in a DjVu file
 def get_pg_iterator(fname):
 	tree = load_xml_tree(fname)
 	return tree.iter(tag="OBJECT")
 
+# Extract the pages in the specified range as XML objects from a DjVu file
 def get_pages(fname, pg_start, pg_end):
 	pg_start -= 1
 	pg_end -= 1
@@ -41,6 +46,7 @@ def get_pages(fname, pg_start, pg_end):
 		i += 1
 	return pages
 
+# Get list of all image numbers of pages
 def get_page_numbers(pages):
 	page_nums = []
 	for page in pages:
@@ -48,44 +54,56 @@ def get_page_numbers(pages):
 		page_nums.append(pg_num)
 	return page_nums
 
+# Get IMAGE number of page specififed. Almost never actually the page number on the page
 def get_page_number(page):
 	return page.find(".//PARAM").get('value')[-9:-5]
 
+# Get the book name
 def get_book_name(pages):
 	return pages[0].find(".//PARAM").get('value')[:-10]
 
+# Get all line XML objects in all pages
 def get_lines_in_pages(pages):
 	return pages.findall(".//LINE")
 
+# Get all XMl objects of lines on the page
 def get_all_lines(page):
 	return page.findall(".//LINE")
 
+# Get line XMl object of specified line
 def get_line(page, line_num):
 	lines = page.findall(".//LINE")
 	return lines[line_num]
 
+# Get line text as a single string
 def get_line_text(line):
 	s = ' '.join(i.text for i in line.findall(".//WORD"))
 	return s.encode('utf-8')
 
+# Get (width, height) tuple of page size in pixels
 def get_page_dimensions(page):
 	return (int(page.attrib['width']), int(page.attrib['height']))
 
+# Get bounding box of word
 def get_full_coords(word):
 	return [int(i) for i in word.attrib['coords'].split(',')]
 
+# Return coordinates of top left(?confirm this?) corner of bounding box of word
 def get_word_pos(word):
 	coords = get_full_coords(word)
 	return (coords[0], coords[1])
 
+# Get height of bounding box of word
 def get_word_size(word):
 	coords = get_full_coords(word)
 	return coords[1] - coords[3]
 
+# Count all syllables in line
 def syllable_count(line):
 	text = [i.text.encode('utf-8') for i in line.findall(".//WORD")]
 	return sum((word_syls(i) for i in text))
 
+# Count the syllables in word. If not in the CMU corpus, estimates by number of vowels surrounded by consonants
 def word_syls(word):
 	if word in words:
 		pronounciation = words[word]
@@ -105,7 +123,7 @@ def word_syls(word):
 					vow = False
 		return count
 
-
+# Get counts of various parts of speech in a line
 def pos_count(line):
 	words = ' '.join([i.text for i in line.findall(".//WORD")])
 	tok = nltk.word_tokenize(words)
@@ -123,15 +141,18 @@ def pos_count(line):
 			result.append(0)
 	return result
 
+# Get a dictionary which maps from XML elements to their parents in pages
 def get_parent_map(pages):
 	return {c:p for page in pages for p in page.iter() for c in p}
 
+# Get numpy table with all data for all pages
 def easy_feature_table(pages, freq_dict):
 	parent_map = get_parent_map(pages)
 	dict_sum = sum(freq_dict.itervalues())
 	tags, data = get_feature_table(parent_map, pages, freq_dict, dict_sum)
 	return tags, data
 
+# Get a numpy table containing all single feature vectors of all lines on all pages
 def get_feature_table(parent_map, pages, freq_dict, dict_sum):
 	data = []
 	tags = []
@@ -142,6 +163,7 @@ def get_feature_table(parent_map, pages, freq_dict, dict_sum):
 			tags += ltags
 	return np.asarray(tags), np.vstack(data)
 
+# Get a numpy array containing all single feature vectors of all lines on the page specified
 def get_feature_table_pg(parent_map, page, freq_dict, dict_sum):
 	lines = get_all_lines(page)
 	pg_dim = get_page_dimensions(page)
@@ -156,14 +178,17 @@ def get_feature_table_pg(parent_map, page, freq_dict, dict_sum):
 	for i in range(len(lines)):
 		tags.append("%s_%s_%d" % (name, num, i))
 		data.append(get_single_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
-	result = [lsum([getelement(data, j) for j in range(i-2,i+3)]) for i in range(len(data))]
+	result = data
+	# result = [lsum([getelement(data, j) for j in range(i-2,i+3)]) for i in range(len(data))]
 	return tags, result
 
+# Get the single feature vector of the line specified by page_index and line_num
 def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_sum):
 	result = []
 	page = pages[page_index]
 	lines = get_all_lines(pages[page_index])
 	pg_dim = get_page_dimensions(page)
+	# result = get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
 	prev_lines=[]
 	next_lines=[]
 	if line_num < 2:
@@ -175,6 +200,7 @@ def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_
 	result = get_feature_vec(parent_map, prev_lines+lines+next_lines, line_num+len(prev_lines), pg_dim, freq_dict, dict_sum)
 	return result
 
+# Get feature vector of just the line specified with no neighbor data as a list of values
 def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec = [0] * 12
 	if line_num < len(lines) and line_num >= 0:
@@ -222,7 +248,8 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 			prob = get_probability(line, freq_dict, dict_sum)
 			vec += pos + [prob]
 	return vec
-	
+
+# Get the feature vector of the specified line as a list of values along with four surrounding lines
 def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 	totalvec = []
 	for index in range(line_num-2, line_num+3):
@@ -235,6 +262,7 @@ def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 		totalvec += vec
 	return totalvec
 
+# Find the log-product probability that a line fits the language model contained in freq_dict. dict_sum is the sum of all frequencies of words in the model
 def get_probability(line, freq_dict, dict_sum):
 	text = get_line_text(line)
 	eps = .01
@@ -248,6 +276,7 @@ def get_probability(line, freq_dict, dict_sum):
 		total += p
 	return total
 
+# Get element in arr at index. If index < 0, get arr[0] and if index > len(arr)-1, get arr[-1]
 def getelement(arr, index):
 	if index < 0:
 		return arr[0]
@@ -258,6 +287,7 @@ def getelement(arr, index):
 
 
 ### NOTE: ONLY WORKS ON CONTIGUOUS DATA!!!!!!!!!!
+# Also probably useless with a crf
 def concat_neighbors(data, num_neighbors):
 	print data.shape
 	data = data.tolist()
@@ -270,6 +300,7 @@ def concat_neighbors(data, num_neighbors):
 	print data.shape
 	return data
 
+# Save data to the training_data file
 def save_data(data, names):
 	names = np.array(names)
 	names = np.reshape(names, (len(names), 1))
@@ -283,15 +314,106 @@ def save_data(data, names):
 	np.savetxt(f, final_table, fmt=fmt_string)
 	f.close()
 
+# Trim whitespace and punctuation
 def clean_word(word):
 	return word.strip(string.punctuation + string.whitespace).lower()
 
+# Take a tag in book_page_line format and return the tuple (book, page, line)
 def parse_tag(tag):
 	result = tag.split('_')
 	return result[-3], result[-2], result[-1]
 
+# Concatenate all elements in a list of lists together
 def lsum(list):
 	result = []
 	for l in list:
 		result += l
 	return result
+
+# Return True if the two lines specified are adjacent, False o.w.
+# prev_page is page pg_num1
+def check_adjacent(pg_num1, line1, pg_num2, line2, prev_page):
+	if pg_num1 == pg_num2:
+		return abs(line1-line2)==1
+	else:
+		if pg_num1 > pg_num2:
+			# swap two lines
+			tmp = pg_num1
+			pg_num1 = pg_num2
+			pg_num2 = tmp
+			tmp = line1
+			line1 = line2
+			line2 = tmp
+		# now we know that pg_num1 < pg_num2
+		if line2 == 0 and pg_num1 == pg_num2 - 1:
+			return line1 == len(get_all_lines(prev_page)) - 1
+		else:
+			return False
+
+# Need to make X into a list of contiguous data points (list of dicts)
+def crfformat(X, Y, names):
+	lines = np.asarray(map(parse_tag, names))
+	lines[:,2] = [i.zfill(4) for i in lines[:,2]]
+	names = ['_'.join(i) for i in lines]
+	nameinds = np.argsort(names, axis=0)
+	lines = lines[nameinds]
+	X = X[nameinds]
+	Y = Y[nameinds]
+
+	### X and Y are now sorted in lexical order according to names
+	index = 0
+	X1 = []
+	Y1 = []
+	names1 = []
+	for book in np.unique(lines[:,0]):
+		contig_X = []
+		contig_Y = []
+		contig_names = []
+		pages = list(get_pg_iterator("../All Text/" + book + "_djvu.xml"))
+		pg_nums = get_page_numbers(pages)
+
+		prev_page = pg_nums.index(lines[index,1])
+		prev_line = int(lines[index,2])
+		contig_X.append(make_dict(X[index]))
+		contig_Y.append(str(Y[index]))
+		contig_names.append(names[index])
+		index += 1
+		while index < len(lines) and lines[index,0]==book:
+			if len(contig_X) > 0 and not check_adjacent(int(lines[index-1,1]), int(lines[index-1,2]), int(lines[index, 1]), int(lines[index, 2]), pages[prev_page]):
+				X1.append(contig_X)
+				Y1.append(contig_Y)
+				names1.append(contig_names)
+				contig_X = []
+				contig_Y = []
+				contig_names = []
+			contig_X.append(make_dict(X[index]))
+			contig_Y.append(str(Y[index]))
+			contig_names.append(names[index])
+			prev_page = pg_nums.index(lines[index,1])
+			index += 1
+		if len(contig_X) > 0:
+			X1.append(contig_X)
+			Y1.append(contig_Y)
+			names1.append(contig_names)
+	return X1, Y1, names1
+
+# Turn a list of features into a dict from feature number to value
+def make_dict(feature_vec):
+	return {str(i):feature_vec[i] for i in range(len(feature_vec))}
+
+def splitcrf(X, Y, names, test_percentage):
+	num_lines = sum(len(x) for x in X)
+	line_count = 0
+	Xlearn = X
+	Ylearn = Y
+	Nlearn = names
+	Xtest = []
+	Ytest = []
+	Ntest = []
+	while line_count < test_percentage * num_lines:
+		ind = random.randint(0, len(Xlearn) - 1)
+		Xtest.append(Xlearn.pop(ind))
+		Ytest.append(Ylearn.pop(ind))
+		Ntest.append(Nlearn.pop(ind))
+		line_count += len(Xtest[-1])
+	return Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest
