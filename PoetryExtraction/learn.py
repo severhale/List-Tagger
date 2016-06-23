@@ -49,18 +49,6 @@ names = np.asarray(names)
 # param_grid = {'c1':scipy.stats.expon(scale=.5), 'c2':scipy.stats.expon(scale=.05)}
 
 
-treeclf = RandomForestClassifier(n_estimators=20, criterion='entropy', max_features='auto', bootstrap=True, oob_score=True, n_jobs=2, class_weight="balanced", random_state=random.randint(1, 100))
-Xlearn, Xtest, Ylearn, Ytest, names_learn, names_test = sklearn.cross_validation.train_test_split(X, Y, names, test_size=.25, random_state = random.randint(1, 100))
-treeclf.fit(Xlearn, Ylearn)
-Yhat = treeclf.predict(Xtest)
-confusion = sklearn.metrics.confusion_matrix(Ytest, Yhat)
-F1 = sklearn.metrics.f1_score(Ytest, Yhat, average=None)
-print "Tree Confusion"
-print confusion
-print "Tree F1"
-print F1
-
-
 clf = sklearn_crfsuite.CRF(algorithm='pa', all_possible_transitions=True)
 f1_scorer = make_scorer(metrics.flat_f1_score, average='macro', labels=target_names)
 start = time.clock()
@@ -97,6 +85,18 @@ print "Confusion Matrix"
 print confusion
 # print "Probabilities"
 # print np.hstack((np.reshape(names_test, (len(names_test), 1))[Ytest==1], prob[Ytest==1]))
+
+treeclf = RandomForestClassifier(n_estimators=20, criterion='entropy', max_features='auto', bootstrap=True, oob_score=True, n_jobs=2, class_weight="balanced", random_state=random.randint(1, 100))
+X, Y, names = uncrfformat(X, Y, names)
+Xlearn, Xtest, Ylearn, Ytest, names_learn, names_test = sklearn.cross_validation.train_test_split(X, Y, names, test_size=.25, random_state = random.randint(1, 100))
+treeclf.fit(Xlearn, Ylearn)
+Yhat = treeclf.predict(Xtest)
+confusion = sklearn.metrics.confusion_matrix(Ytest, Yhat)
+F1 = sklearn.metrics.f1_score(Ytest, Yhat, average=None)
+print "Tree Confusion"
+print confusion
+print "Tree F1"
+print F1
 
 if visualize:
 	scatter_matrix(df, alpha=0.2, figsize=(8, 8), diagonal='none');

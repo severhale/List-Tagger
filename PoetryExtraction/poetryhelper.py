@@ -354,9 +354,9 @@ def check_adjacent(pg_num1, line1, pg_num2, line2, prev_page):
 def crfformat(X, Y, names):
 	lines = np.asarray(map(parse_tag, names))
 	lines[:,2] = [i.zfill(4) for i in lines[:,2]]
-	names = ['_'.join(i) for i in lines]
-	nameinds = np.argsort(names, axis=0)
+	nameinds = np.lexsort(lines.T[::-1])
 	lines = lines[nameinds]
+	names = np.asarray(names)[nameinds]
 	X = X[nameinds]
 	Y = Y[nameinds]
 
@@ -397,6 +397,21 @@ def crfformat(X, Y, names):
 			names1.append(contig_names)
 	return X1, Y1, names1
 
+# Takes a dict and returns its values sorted by key
+def flatten_and_sort(d):
+	return [d[str(i)] for i in sorted(map(int, d))]
+
+# Flattens data in crf format to sklearn-compatible arrays
+def uncrfformat(cX, cY, cnames):
+	X = []
+	Y = []
+	names = []
+	for contig_X in cX:
+		X += map(flatten_and_sort, contig_X)
+	Y = lsum(cY)
+	names = lsum(cnames)
+	return np.asarray(X), np.asarray(Y), names
+
 # Turn a list of features into a dict from feature number to value
 def make_dict(feature_vec):
 	return {str(i):feature_vec[i] for i in range(len(feature_vec))}
@@ -404,9 +419,9 @@ def make_dict(feature_vec):
 def splitcrf(X, Y, names, test_percentage):
 	num_lines = sum(len(x) for x in X)
 	line_count = 0
-	Xlearn = X
-	Ylearn = Y
-	Nlearn = names
+	Xlearn = X[:]
+	Ylearn = Y[:]
+	Nlearn = names[:]
 	Xtest = []
 	Ytest = []
 	Ntest = []
