@@ -3,6 +3,7 @@ from sklearn.datasets import load_svmlight_file
 from sklearn import svm
 from sklearn import cross_validation
 from sklearn.grid_search import RandomizedSearchCV
+from sklearn.grid_search import GridSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.externals import joblib
 from sklearn.metrics import make_scorer
@@ -50,7 +51,7 @@ names = np.asarray(names)
 
 
 clf = sklearn_crfsuite.CRF(algorithm='pa', all_possible_transitions=True)
-f1_scorer = make_scorer(metrics.flat_f1_score, average='macro', labels=target_names)
+# f1_scorer = make_scorer(metrics.flat_f1_score, average='weighted', labels=target_names)
 start = time.clock()
 # clf = RandomizedSearchCV(crf, param_grid, cv=3, verbose=1, n_jobs=-1, n_iter=50, scoring=f1_scorer)
 print "Beginning data format"
@@ -97,6 +98,18 @@ print "Tree Confusion"
 print confusion
 print "Tree F1"
 print F1
+
+# param_grid = {'C':[.1,1,10], 'gamma':[.1,1,10]}
+# svc = svm.SVC(kernel='rbf')
+# svcclf = GridSearchCV(svc, param_grid)
+# svcclf.fit(Xlearn, Ylearn)
+# Yhat = svcclf.predict(Ytest)
+# confusion = sklearn.metrics.confusion_matrix(Ytest, Yhat)
+# F1 = sklearn.metrics.f1_score(Ytest, Yhat, average=None)
+# print "SVC Confusion"
+# print confusion
+# print "SVC F1"
+# print F1
 
 if visualize:
 	scatter_matrix(df, alpha=0.2, figsize=(8, 8), diagonal='none');

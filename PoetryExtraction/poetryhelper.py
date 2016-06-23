@@ -7,6 +7,40 @@ import string
 import math
 import random
 
+crfd = {
+	'syl_c':0, # int-int
+	'syl_pc':1, # int-int
+	'syl_cn':2, # int-int
+	'prob_c':3, # int
+	'lmarg_c':4, # float.1
+	'lmarg_pc':5, # float.1-float.1
+	'lmarg_cn':6, # float.1-float.1
+	'rmarg_c':7, # float.1
+	'rmarg_pc':8, # float.1-float.1
+	'rmarg_cn':9, # float.1-float.1
+	'line1':10, # [0,1]
+	'line2':11, # [0,1]
+	'word1':12, # string
+	'rf_c':13, # [0,1]
+	'rf_pc':14, # [0,1]-[0,1]
+	'rf_cn':15, # [0,1]-[0,1]
+}
+
+treed = {
+	'syl_c':0, # int-int
+	'syl_p':1, # int-int
+	'syl_n':2, # int-int
+	'prob_c':3, # float
+	'lmarg_c':4, # float
+	'lmarg_p':5, # float-float
+	'lmarg_n':6, # float-float
+	'rmarg_c':7, # float
+	'rmarg_p':8, # float-float
+	'rmarg_n':9, # float-float
+	'line1':10, # [0,1]
+	'line2':11, # [0,1]
+}
+
 words = nltk.corpus.cmudict.dict()
 
 # Load all text from file as an array of strings
@@ -248,6 +282,29 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 			prob = get_probability(line, freq_dict, dict_sum)
 			vec += pos + [prob]
 	return vec
+
+def get_crf_data(tree_clf, X1, Y1, names1):
+	# need to go through and get each line referenced
+	X, Y, names = crfformat(X1, Y1, names1)
+	tree_guess = tree_clf.predict(X1)
+	for i in range(len(data)):
+		line = data[i]
+		linedata = line.split('_')
+		vec = [0] * len(crfd)
+		vec[crfd['syl_c']] = "%d" % line[treed['syl_c']]
+		vec[crfd['syl_pc']] = "%d-%d" % (line[treed['syl_p']], line[treed['syl_c']])
+		vec[crfd['syl_cn']] = "%d-%d" % (line[treed['syl_c']], line[treed['syl_n']])
+		vec[crfd['prob_c']] = "%d" % line[treed['prob_c']]
+		vec[crfd['lmarg_c']] = "%.1f" % line[treed['lmarg_c']]
+		vec[crfd['lmarg_pc']] = "%.1f-%.1f" % (line[treed['lmarg_p']], line[treed['lmarg_c']])
+		vec[crfd['lmarg_cn']] = "%.1f-%.1f" % (line[treed['lmarg_c']], line[treed['lmarg_n']])
+		vec[crfd['rmarg_c']] = "%.1f" % line[treed['rmarg_c']]
+		vec[crfd['rmarg_pc']] = "%.1f-%.1f" % (line[treed['rmarg_p']], line[treed['rmarg_c']])
+		vec[crfd['rmarg_cn']] = "%.1f-%.1f" % (line[treed['rmarg_c']], line[treed['rmarg_n']])
+		vec[crfd['line1']] = "1" if linedata[2]==0 else "0"
+		vec[crfd['line2']] = "1" if linedata[2]==1 else "0"
+		vec[crfd['rf_c']] = "%s" % tree_guess[i]
+		vec[crfd['rf_pc']] = "%s-%s" % 
 
 # Get the feature vector of the specified line as a list of values along with four surrounding lines
 def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
