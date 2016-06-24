@@ -50,6 +50,8 @@ treed = {
 	'nums':20 # float
 }
 
+invcrfd = {v:k for k,v in crfd.items()}
+
 words = nltk.corpus.cmudict.dict()
 
 # Load all text from file as an array of strings
@@ -302,10 +304,9 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 			vec[treed['nums']] = pos[3]
 	return vec
 
-def get_crf_data(tree_clf, X1, Y1, names1):
+def get_crf_data(tree_clf, X, Y, names):
 	# need to go through and get each line referenced
-	pages1 = pages_from_names(names1)
-	X, Y, names, pages = crfformat(X1, Y1, names1, pages1)
+	pages = pages_from_names(lsum(names))
 	index = 0
 	for i in range(len(X)):
 		tree_guess = tree_clf.predict(X[i])
@@ -458,8 +459,8 @@ def pages_from_names(names):
 	lines = np.asarray(map(parse_tag, names))
 	lines[:,2] = [i.zfill(4) for i in lines[:,2]]
 	inds = np.lexsort(lines.T[::-1])
-	linds = list(inds)
-	revinds = [linds.index(i) for i in range(len(linds))]
+	revinds = [np.where(inds==i)[0][0] for i in range(len(inds))]
+	lines = lines[inds]
 	print len(lines),"lines"
 	index = 0
 	for book in np.unique(lines[:,0]):
@@ -472,12 +473,16 @@ def pages_from_names(names):
 			last_pg_num = lines[index,1]
 			index += 1
 	print len(result),"pages"
-	return np.asarray(result)[revinds]
+	return [result[i] for i in revinds]
 
 # Make X into a list of lists of dicts containing feature data
 # Y is a list of lists of truth data
 # Names is a list of lists of names
 # pages is a list of all pages
+# BUG(?): Can't convert pages to a numpy array because it turns it into a table
+# where each row contains a page object and column contains the child objects/parameters
+# of the page object
+# .ugh.
 def crfformat(X, Y, names, pages):
 	lines = np.asarray(map(parse_tag, names))
 	lines[:,2] = [i.zfill(4) for i in lines[:,2]]
@@ -486,7 +491,7 @@ def crfformat(X, Y, names, pages):
 	names = np.asarray(names)[nameinds]
 	X = X[nameinds]
 	Y = Y[nameinds]
-	pages = pages[nameinds]
+	pages = [pages[i] for i in nameinds]
 
 	### X and Y are now sorted in lexical order according to names
 	index = 0
@@ -499,7 +504,7 @@ def crfformat(X, Y, names, pages):
 		contig_names = []
 
 		prev_line = int(lines[index,2])
-		contig_X.append(make_dict(X[index]))
+		contig_X.append(X[index])
 		contig_Y.append(str(Y[index]))
 		contig_names.append(names[index])
 		index += 1
@@ -519,7 +524,7 @@ def crfformat(X, Y, names, pages):
 			X1.append(contig_X)
 			Y1.append(contig_Y)
 			names1.append(contig_names)
-	return X1, Y1, names1, pages
+	return X1, Y1, names1
 
 # Takes a dict and returns its values sorted by key
 def flatten_and_sort(d):
@@ -527,18 +532,19 @@ def flatten_and_sort(d):
 
 # Flattens data in crf format to sklearn-compatible arrays
 def uncrfformat(cX, cY, cnames):
-	X = []
-	Y = []
-	names = []
-	for contig_X in cX:
-		X += map(flatten_and_sort, contig_X)
+	# X = []
+	# Y = []
+	# names = []
+	X = lsum(cX)
+	# for contig_X in cX:
+	# 	X += map(flatten_and_sort, contig_X)
 	Y = lsum(cY)
 	names = lsum(cnames)
 	return np.asarray(X), np.asarray(Y), names
 
-# Turn a list of features into a dict from feature number to value
+# Turn a list of features into a dict from feature name to value
 def make_dict(feature_vec):
-	return {str(i):feature_vec[i] for i in range(len(feature_vec))}
+	return {invcrfd[i]:feature_vec[i] for i in range(len(feature_vec))}
 
 def splitcrf(X, Y, names, test_percentage):
 	num_lines = sum(len(x) for x in X)
