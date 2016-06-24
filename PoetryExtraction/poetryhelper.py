@@ -27,18 +27,27 @@ crfd = {
 }
 
 treed = {
-	'syl_c':0, # int-int
-	'syl_p':1, # int-int
-	'syl_n':2, # int-int
+	'syl_c':0, # int
+	'syl_p':1, # int
+	'syl_n':2, # int
 	'prob_c':3, # float
 	'lmarg_c':4, # float
-	'lmarg_p':5, # float-float
-	'lmarg_n':6, # float-float
+	'lmarg_p':5, # float
+	'lmarg_n':6, # float
 	'rmarg_c':7, # float
-	'rmarg_p':8, # float-float
-	'rmarg_n':9, # float-float
-	'line1':10, # [0,1]
-	'line2':11, # [0,1]
+	'rmarg_p':8, # float
+	'rmarg_n':9, # float
+	'tmarg_c':10, # float
+	'tmarg_p':11, # float
+	'tmarg_n':12, # float
+	'bmarg_c':13, # float
+	'bmarg_p':14, # float
+	'bmarg_n':15, # float
+	'linenum':16, # int
+	'adj':17, # float
+	'pnoun':18, # float
+	'det':19, # float
+	'nums':20 # float
 }
 
 words = nltk.corpus.cmudict.dict()
@@ -168,7 +177,7 @@ def pos_count(line):
 	counts = counts.astype(float)
 	counts /= total
 	result = []
-	for c in ['CD', 'DT', 'NNP', 'JJ', 'NN']:
+	for c in ['JJ', 'NNP', 'DT', 'CD']:
 		if c in unique:
 			result.append(counts[unique==c][0])
 		else:
@@ -225,10 +234,10 @@ def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_
 	# result = get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
 	prev_lines=[]
 	next_lines=[]
-	if line_num < 2:
+	if line_num < 1:
 		if page_index > 0:
 			prev_lines = get_all_lines(pages[page_index-1])
-	if line_num > len(lines)-3:
+	if line_num > len(lines)-2:
 		if page_index < len(pages)-1:
 			next_lines = get_all_lines(pages[page_index-1])
 	result = get_feature_vec(parent_map, prev_lines+lines+next_lines, line_num+len(prev_lines), pg_dim, freq_dict, dict_sum)
@@ -236,7 +245,7 @@ def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_
 
 # Get feature vector of just the line specified with no neighbor data as a list of values
 def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
-	vec = [0] * 12
+	vec = [0] * len(treed)
 	if line_num < len(lines) and line_num >= 0:
 		line = lines[line_num]
 		if len(line.findall(".//WORD")) > 0:
@@ -277,47 +286,85 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 			syllables = syllable_count(line)
 			para = parent_map[line]
 			plength = len(para.findall(".//WORD"))
-			vec = [l_margin/pg_dim[0], r_margin/pg_dim[0], t_margin/pg_dim[1], b_margin/pg_dim[1], syllables, plength]
+			margins = [l_margin/pg_dim[0], r_margin/pg_dim[0], t_margin/pg_dim[1], b_margin/pg_dim[1], syllables, plength]
 			pos = pos_count(line)
 			prob = get_probability(line, freq_dict, dict_sum)
-			vec += pos + [prob]
+			vec[treed['syl_c']] = syllables
+			vec[treed['prob_c']] = prob
+			vec[treed['lmarg_c']] = margins[0]
+			vec[treed['rmarg_c']] = margins[1]
+			vec[treed['tmarg_c']] = margins[2]
+			vec[treed['bmarg_c']] = margins[3]
+			vec[treed['linenum']] = line_num
+			vec[treed['adj']] = pos[0]
+			vec[treed['pnoun']] = pos[1]
+			vec[treed['det']] = pos[2]
+			vec[treed['nums']] = pos[3]
 	return vec
 
 def get_crf_data(tree_clf, X1, Y1, names1):
 	# need to go through and get each line referenced
-	X, Y, names = crfformat(X1, Y1, names1)
-	tree_guess = tree_clf.predict(X1)
-	for i in range(len(data)):
-		line = data[i]
-		linedata = line.split('_')
-		vec = [0] * len(crfd)
-		vec[crfd['syl_c']] = "%d" % line[treed['syl_c']]
-		vec[crfd['syl_pc']] = "%d-%d" % (line[treed['syl_p']], line[treed['syl_c']])
-		vec[crfd['syl_cn']] = "%d-%d" % (line[treed['syl_c']], line[treed['syl_n']])
-		vec[crfd['prob_c']] = "%d" % line[treed['prob_c']]
-		vec[crfd['lmarg_c']] = "%.1f" % line[treed['lmarg_c']]
-		vec[crfd['lmarg_pc']] = "%.1f-%.1f" % (line[treed['lmarg_p']], line[treed['lmarg_c']])
-		vec[crfd['lmarg_cn']] = "%.1f-%.1f" % (line[treed['lmarg_c']], line[treed['lmarg_n']])
-		vec[crfd['rmarg_c']] = "%.1f" % line[treed['rmarg_c']]
-		vec[crfd['rmarg_pc']] = "%.1f-%.1f" % (line[treed['rmarg_p']], line[treed['rmarg_c']])
-		vec[crfd['rmarg_cn']] = "%.1f-%.1f" % (line[treed['rmarg_c']], line[treed['rmarg_n']])
-		vec[crfd['line1']] = "1" if linedata[2]==0 else "0"
-		vec[crfd['line2']] = "1" if linedata[2]==1 else "0"
-		vec[crfd['rf_c']] = "%s" % tree_guess[i]
-		vec[crfd['rf_pc']] = "%s-%s" % 
+	pages1 = pages_from_names(names1)
+	X, Y, names, pages = crfformat(X1, Y1, names1, pages1)
+	index = 0
+	for i in range(len(X)):
+		tree_guess = tree_clf.predict(X[i])
+		for j in range(len(X[i])):
+			line = X[i][j]
+			linedata = names[i][j].split('_')
+			linenum = int(linedata[2])
+			vec = [0] * len(crfd)
+			vec[crfd['syl_c']] = "%d" % line[treed['syl_c']]
+			vec[crfd['syl_pc']] = "%d-%d" % (line[treed['syl_p']], line[treed['syl_c']])
+			vec[crfd['syl_cn']] = "%d-%d" % (line[treed['syl_c']], line[treed['syl_n']])
+			vec[crfd['prob_c']] = "%d" % line[treed['prob_c']]
+			vec[crfd['lmarg_c']] = "%.1f" % line[treed['lmarg_c']]
+			vec[crfd['lmarg_pc']] = "%.1f-%.1f" % (line[treed['lmarg_p']], line[treed['lmarg_c']])
+			vec[crfd['lmarg_cn']] = "%.1f-%.1f" % (line[treed['lmarg_c']], line[treed['lmarg_n']])
+			vec[crfd['rmarg_c']] = "%.1f" % line[treed['rmarg_c']]
+			vec[crfd['rmarg_pc']] = "%.1f-%.1f" % (line[treed['rmarg_p']], line[treed['rmarg_c']])
+			vec[crfd['rmarg_cn']] = "%.1f-%.1f" % (line[treed['rmarg_c']], line[treed['rmarg_n']])
+			vec[crfd['line1']] = "1" if linenum==0 else "0"
+			vec[crfd['line2']] = "1" if linenum==1 else "0"
+			linetext = get_line(pages[index], linenum)
+			vec[crfd['word1']] = "%s" % linetext[0].text if len(linetext)>0 else ""
+			vec[crfd['rf_c']] = "%s" % tree_guess[j]
+			if j==0:
+				rf_p = "null"
+			else:
+				rf_p = tree_guess[j-1]
+			if j==len(X[i])-1:
+				rf_n = "null"
+			else:
+				rf_n = tree_guess[j+1]
+			vec[crfd['rf_pc']] = "%s-%s" % (rf_p, tree_guess[j])
+			vec[crfd['rf_cn']] = "%s-%s" % (tree_guess[j], rf_n)
+			X[i][j] = make_dict(vec)
+			index += 1
+	return X, Y, names
 
 # Get the feature vector of the specified line as a list of values along with four surrounding lines
 def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
-	totalvec = []
-	for index in range(line_num-2, line_num+3):
-		i=index
-		if index<0:
-			i=0
-		elif index>=len(lines):
-			index=len(lines)-1
-		vec = get_single_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum)
-		totalvec += vec
-	return totalvec
+	vec = get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
+	if line_num > 0:
+		pvec = get_single_feature_vec(parent_map, lines, line_num-1, pg_dim, freq_dict, dict_sum)
+	else:
+		pvec = vec
+	if line_num < len(lines):
+		nvec = get_single_feature_vec(parent_map, lines, line_num+1, pg_dim, freq_dict, dict_sum)
+	else:
+		nvec = vec
+	vec[treed['syl_p']] = pvec[treed['syl_c']]
+	vec[treed['syl_n']] = nvec[treed['syl_c']]
+	vec[treed['lmarg_p']] = pvec[treed['lmarg_c']]
+	vec[treed['lmarg_n']] = nvec[treed['lmarg_c']]
+	vec[treed['rmarg_p']] = pvec[treed['rmarg_c']]
+	vec[treed['rmarg_n']] = nvec[treed['rmarg_c']]
+	vec[treed['bmarg_p']] = pvec[treed['bmarg_c']]
+	vec[treed['bmarg_n']] = nvec[treed['bmarg_c']]
+	vec[treed['tmarg_p']] = pvec[treed['tmarg_c']]
+	vec[treed['tmarg_n']] = nvec[treed['tmarg_c']]
+	return vec
 
 # Find the log-product probability that a line fits the language model contained in freq_dict. dict_sum is the sum of all frequencies of words in the model
 def get_probability(line, freq_dict, dict_sum):
@@ -362,7 +409,6 @@ def save_data(data, names):
 	names = np.array(names)
 	names = np.reshape(names, (len(names), 1))
 	print data.shape
-	print names.shape
 	final_table = np.hstack((names, data))
 	fmt_string = "%s\t"
 	for i in range(1, data.shape[1] + 1):
@@ -407,8 +453,32 @@ def check_adjacent(pg_num1, line1, pg_num2, line2, prev_page):
 		else:
 			return False
 
-# Need to make X into a list of contiguous data points (list of dicts)
-def crfformat(X, Y, names):
+def pages_from_names(names):
+	result = []
+	lines = np.asarray(map(parse_tag, names))
+	lines[:,2] = [i.zfill(4) for i in lines[:,2]]
+	inds = np.lexsort(lines.T[::-1])
+	linds = list(inds)
+	revinds = [linds.index(i) for i in range(len(linds))]
+	print len(lines),"lines"
+	index = 0
+	for book in np.unique(lines[:,0]):
+		pages = list(get_pg_iterator("../All Text/" + book + "_djvu.xml"))
+		pg_nums = get_page_numbers(pages)
+		last_pg_num = ''
+		while index < len(lines) and lines[index,0]==book:
+			num = pg_nums.index(lines[index,1])
+			result.append(pages[num])
+			last_pg_num = lines[index,1]
+			index += 1
+	print len(result),"pages"
+	return np.asarray(result)[revinds]
+
+# Make X into a list of lists of dicts containing feature data
+# Y is a list of lists of truth data
+# Names is a list of lists of names
+# pages is a list of all pages
+def crfformat(X, Y, names, pages):
 	lines = np.asarray(map(parse_tag, names))
 	lines[:,2] = [i.zfill(4) for i in lines[:,2]]
 	nameinds = np.lexsort(lines.T[::-1])
@@ -416,6 +486,7 @@ def crfformat(X, Y, names):
 	names = np.asarray(names)[nameinds]
 	X = X[nameinds]
 	Y = Y[nameinds]
+	pages = pages[nameinds]
 
 	### X and Y are now sorted in lexical order according to names
 	index = 0
@@ -426,33 +497,29 @@ def crfformat(X, Y, names):
 		contig_X = []
 		contig_Y = []
 		contig_names = []
-		pages = list(get_pg_iterator("../All Text/" + book + "_djvu.xml"))
-		pg_nums = get_page_numbers(pages)
 
-		prev_page = pg_nums.index(lines[index,1])
 		prev_line = int(lines[index,2])
 		contig_X.append(make_dict(X[index]))
 		contig_Y.append(str(Y[index]))
 		contig_names.append(names[index])
 		index += 1
 		while index < len(lines) and lines[index,0]==book:
-			if len(contig_X) > 0 and not check_adjacent(int(lines[index-1,1]), int(lines[index-1,2]), int(lines[index, 1]), int(lines[index, 2]), pages[prev_page]):
+			if len(contig_X) > 0 and not check_adjacent(int(lines[index-1,1]), int(lines[index-1,2]), int(lines[index, 1]), int(lines[index, 2]), pages[index-1]):
 				X1.append(contig_X)
 				Y1.append(contig_Y)
 				names1.append(contig_names)
 				contig_X = []
 				contig_Y = []
 				contig_names = []
-			contig_X.append(make_dict(X[index]))
+			contig_X.append(X[index])
 			contig_Y.append(str(Y[index]))
 			contig_names.append(names[index])
-			prev_page = pg_nums.index(lines[index,1])
 			index += 1
 		if len(contig_X) > 0:
 			X1.append(contig_X)
 			Y1.append(contig_Y)
 			names1.append(contig_names)
-	return X1, Y1, names1
+	return X1, Y1, names1, pages
 
 # Takes a dict and returns its values sorted by key
 def flatten_and_sort(d):
