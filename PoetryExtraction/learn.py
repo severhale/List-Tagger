@@ -21,13 +21,14 @@ import scipy.stats
 from poetryhelper import *
 import time;
 
-visualize = False
+visualize = True
 
 #### load svm data file
 X,Y = load_svmlight_file('joined_data')
 target_names = np.array(["Non-Poetry", "Begin Poem", "Middle Poem", "End Poem", "Title", "Author"])
 X = X.toarray()
 Y = Y.astype(int)
+
 if visualize:
 	XY = np.hstack((X,target_names[np.array(Y)][:,np.newaxis]))
 	feature_names = range(len(X[0]))
@@ -87,10 +88,11 @@ if classify_crf:
 	# print "Probabilities"
 	# print np.hstack((np.reshape(names_test, (len(names_test), 1))[Ytest==1], prob[Ytest==1]))
 	X, Y, names = uncrfformat(X, Y, names)
-
-X, Y, names = crfformat(X, Y, names, pages_from_names(names))
-Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest = splitcrf(X, Y, names, .25)
-Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2 = splitcrf(Xlearn, Ylearn, Nlearn, .25)
+pages = pages_from_names(names)
+X, Y, names, pages = crfformat(X, Y, names, pages)
+Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest = splitcrf(X, Y, names, pages, .25)
+Xdev, Xtest, Ydev, Ytest, Ndev, Ntest, Pdev, Ptest = splitcrf(Xtest, Ytest, Ntest, Ptest, .5)
+Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2, Plearn1, Plearn2 = splitcrf(Xlearn, Ylearn, Nlearn, Plearn, .5)
 
 XL1, YL1, NL1 = uncrfformat(Xlearn1, Ylearn1, Nlearn1)
 XL2, YL2, NL2 = uncrfformat(Xlearn2, Ylearn2, Nlearn2)
@@ -104,16 +106,24 @@ print confusion
 print "Tree F1"
 print F1
 
-clf = sklearn_crfsuite.CRF(algorithm='pa', all_possible_transitions=True)
-CXlearn, CYlearn, CNlearn = get_crf_data(treeclf, Xlearn2, Ylearn2, Nlearn2)
-CXtest, CYtest, CNtest = get_crf_data(treeclf, Xtest, Ytest, Ntest)
-clf.fit(CXlearn, CYlearn)
+clf = sklearn_crfsuite.CRF(algorithm='pa')
+# crf = sklearn_crfsuite.CRF(algorithm='lbfgs', max_iterations=100)
+# params = {
+# 	'c1':scipy.stats.expon(scale=.5),
+# 	'c2':scipy.stats.expon(scale=.05),
+# }
+# f1_scorer = make_scorer(metrics.flat_f1_score, average='weighted')
+# clf = RandomizedSearchCV(crf, params, cv=5, n_jobs=-1, n_iter=50, scoring=f1_scorer)
+CXlearn = get_crf_data(treeclf, Xlearn2, Nlearn2, Plearn2)
+CXtest = get_crf_data(treeclf, Xtest, Ntest, Ptest)
+CXdev = get_crf_data(treeclf, Xdev, Ndev, Pdev)
+clf.fit(CXlearn, Ylearn2, CXdev, Ydev)
 CYhat = clf.predict(CXtest)
 
-confusion = sklearn.metrics.confusion_matrix(lsum(CYtest), lsum(CYhat))
-F1 = metrics.flat_f1_score(CYtest, CYhat, average=None)
+confusion = sklearn.metrics.confusion_matrix(lsum(Ytest), lsum(CYhat))
+F1 = metrics.flat_f1_score(Ytest, CYhat, average=None)
 
-print metrics.flat_accuracy_score(CYtest, CYhat)
+print metrics.flat_accuracy_score(Ytest, CYhat)
 print "F1: ",F1
 print "Confusion Matrix"
 print confusion
@@ -136,4 +146,5 @@ if visualize:
 	andrews_curves(df, 'Class')
 	plt.show()
 
+joblib.dump(treeclf, "Model/treemodel.pkl")
 joblib.dump(clf, "Model/model.pkl")

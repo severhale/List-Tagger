@@ -6,24 +6,30 @@ import copy
 import string
 import math
 import random
+import operator
+
+classes = ['0', '1', '2', '3', '4', '5']
 
 crfd = {
-	'syl_c':0, # int-int
-	'syl_pc':1, # int-int
-	'syl_cn':2, # int-int
+	'syl_c':0, # int
+	'syl_pc':1, # bool
+	'syl_cn':2, # bool
 	'prob_c':3, # int
 	'lmarg_c':4, # float.1
-	'lmarg_pc':5, # float.1-float.1
-	'lmarg_cn':6, # float.1-float.1
+	'lmarg_pc':5, # bool
+	'lmarg_cn':6, # bool
 	'rmarg_c':7, # float.1
-	'rmarg_pc':8, # float.1-float.1
-	'rmarg_cn':9, # float.1-float.1
+	'rmarg_pc':8, # bool
+	'rmarg_cn':9, # bool
 	'line1':10, # [0,1]
 	'line2':11, # [0,1]
-	'word1':12, # string
+	'capital':12, # bool
 	'rf_c':13, # [0,1]
 	'rf_pc':14, # [0,1]-[0,1]
 	'rf_cn':15, # [0,1]-[0,1]
+	'lmarg_pn':16,
+	'rmarg_pn':17,
+	'syl_pn':18,
 }
 
 treed = {
@@ -304,10 +310,9 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 			vec[treed['nums']] = pos[3]
 	return vec
 
-def get_crf_data(tree_clf, X, Y, names):
+def get_crf_data(tree_clf, X1, names, pages):
+	X = X1[:]
 	# need to go through and get each line referenced
-	pages = pages_from_names(lsum(names))
-	index = 0
 	for i in range(len(X)):
 		tree_guess = tree_clf.predict(X[i])
 		for j in range(len(X[i])):
@@ -316,19 +321,29 @@ def get_crf_data(tree_clf, X, Y, names):
 			linenum = int(linedata[2])
 			vec = [0] * len(crfd)
 			vec[crfd['syl_c']] = "%d" % line[treed['syl_c']]
-			vec[crfd['syl_pc']] = "%d-%d" % (line[treed['syl_p']], line[treed['syl_c']])
-			vec[crfd['syl_cn']] = "%d-%d" % (line[treed['syl_c']], line[treed['syl_n']])
-			vec[crfd['prob_c']] = "%d" % line[treed['prob_c']]
+			vec[crfd['syl_pc']] = "%s" % line[treed['syl_p']]==line[treed['syl_c']]
+			vec[crfd['syl_cn']] = "%s" % line[treed['syl_c']]==line[treed['syl_n']]
+			vec[crfd['syl_pn']] = "%s" % line[treed['syl_p']]==line[treed['syl_n']]
+			# vec[crfd['syl_pc']] = "%d-%d" % (line[treed['syl_p']], line[treed['syl_c']])
+			# vec[crfd['syl_cn']] = "%d-%d" % (line[treed['syl_c']], line[treed['syl_n']])
+			vec[crfd['prob_c']] = "%d" % (line[treed['prob_c']]/10)
 			vec[crfd['lmarg_c']] = "%.1f" % line[treed['lmarg_c']]
-			vec[crfd['lmarg_pc']] = "%.1f-%.1f" % (line[treed['lmarg_p']], line[treed['lmarg_c']])
-			vec[crfd['lmarg_cn']] = "%.1f-%.1f" % (line[treed['lmarg_c']], line[treed['lmarg_n']])
+			# vec[crfd['lmarg_pc']] = "%.1f-%.1f" % (line[treed['lmarg_p']], line[treed['lmarg_c']])
+			# vec[crfd['lmarg_cn']] = "%.1f-%.1f" % (line[treed['lmarg_c']], line[treed['lmarg_n']])
+			vec[crfd['lmarg_pc']] = "%s" % abs(line[treed['lmarg_p']]-line[treed['lmarg_c']])<=.1
+			vec[crfd['lmarg_cn']] = "%s" % abs(line[treed['lmarg_c']]-line[treed['lmarg_n']])<=.1
+			vec[crfd['lmarg_pn']] = "%s" % abs(line[treed['lmarg_p']]-line[treed['lmarg_n']])<=.1
+			
 			vec[crfd['rmarg_c']] = "%.1f" % line[treed['rmarg_c']]
-			vec[crfd['rmarg_pc']] = "%.1f-%.1f" % (line[treed['rmarg_p']], line[treed['rmarg_c']])
-			vec[crfd['rmarg_cn']] = "%.1f-%.1f" % (line[treed['rmarg_c']], line[treed['rmarg_n']])
+			vec[crfd['rmarg_pc']] = "%s" % abs(line[treed['rmarg_p']]-line[treed['rmarg_c']])<=.1
+			vec[crfd['rmarg_cn']] = "%s" % abs(line[treed['rmarg_c']]-line[treed['rmarg_n']])<=.1
+			vec[crfd['rmarg_pn']] = "%s" % abs(line[treed['rmarg_p']]-line[treed['rmarg_n']])<=.1
+			# vec[crfd['rmarg_pc']] = "%.1f-%.1f" % (line[treed['rmarg_p']], line[treed['rmarg_c']])
+			# vec[crfd['rmarg_cn']] = "%.1f-%.1f" % (line[treed['rmarg_c']], line[treed['rmarg_n']])
 			vec[crfd['line1']] = "1" if linenum==0 else "0"
 			vec[crfd['line2']] = "1" if linenum==1 else "0"
-			linetext = get_line(pages[index], linenum)
-			vec[crfd['word1']] = "%s" % linetext[0].text if len(linetext)>0 else ""
+			linetext = get_line(pages[i][j], linenum)
+			vec[crfd['capital']] = "%s" % linetext[0].text.istitle() if len(linetext)>0 else False
 			vec[crfd['rf_c']] = "%s" % tree_guess[j]
 			if j==0:
 				rf_p = "null"
@@ -341,8 +356,7 @@ def get_crf_data(tree_clf, X, Y, names):
 			vec[crfd['rf_pc']] = "%s-%s" % (rf_p, tree_guess[j])
 			vec[crfd['rf_cn']] = "%s-%s" % (tree_guess[j], rf_n)
 			X[i][j] = make_dict(vec)
-			index += 1
-	return X, Y, names
+	return X
 
 # Get the feature vector of the specified line as a list of values along with four surrounding lines
 def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
@@ -498,46 +512,49 @@ def crfformat(X, Y, names, pages):
 	X1 = []
 	Y1 = []
 	names1 = []
+	pages1 = []
 	for book in np.unique(lines[:,0]):
 		contig_X = []
 		contig_Y = []
 		contig_names = []
+		contig_pages = []
 
 		prev_line = int(lines[index,2])
 		contig_X.append(X[index])
 		contig_Y.append(str(Y[index]))
 		contig_names.append(names[index])
+		contig_pages.append(pages[index])
 		index += 1
 		while index < len(lines) and lines[index,0]==book:
 			if len(contig_X) > 0 and not check_adjacent(int(lines[index-1,1]), int(lines[index-1,2]), int(lines[index, 1]), int(lines[index, 2]), pages[index-1]):
 				X1.append(contig_X)
 				Y1.append(contig_Y)
 				names1.append(contig_names)
+				pages1.append(contig_pages)
 				contig_X = []
 				contig_Y = []
 				contig_names = []
+				contig_pages = []
 			contig_X.append(X[index])
 			contig_Y.append(str(Y[index]))
 			contig_names.append(names[index])
+			contig_pages.append(pages[index])
 			index += 1
 		if len(contig_X) > 0:
 			X1.append(contig_X)
 			Y1.append(contig_Y)
 			names1.append(contig_names)
-	return X1, Y1, names1
+			pages1.append(contig_pages)
+	return X1, Y1, names1, pages1
 
-# Takes a dict and returns its values sorted by key
-def flatten_and_sort(d):
-	return [d[str(i)] for i in sorted(map(int, d))]
+# Takes a dict and returns its values in the order specified in crfd
+def flatten(d):
+	order = sorted(crfd.items(), key=operator.itemgetter(1))
+	return [d[i[0]] for i in order]
 
 # Flattens data in crf format to sklearn-compatible arrays
 def uncrfformat(cX, cY, cnames):
-	# X = []
-	# Y = []
-	# names = []
 	X = lsum(cX)
-	# for contig_X in cX:
-	# 	X += map(flatten_and_sort, contig_X)
 	Y = lsum(cY)
 	names = lsum(cnames)
 	return np.asarray(X), np.asarray(Y), names
@@ -546,19 +563,26 @@ def uncrfformat(cX, cY, cnames):
 def make_dict(feature_vec):
 	return {invcrfd[i]:feature_vec[i] for i in range(len(feature_vec))}
 
-def splitcrf(X, Y, names, test_percentage):
+def splitcrf(X, Y, names, pages, test_percentage):
 	num_lines = sum(len(x) for x in X)
 	line_count = 0
 	Xlearn = X[:]
 	Ylearn = Y[:]
 	Nlearn = names[:]
+	Plearn = pages[:]
 	Xtest = []
 	Ytest = []
 	Ntest = []
+	Ptest = []
 	while line_count < test_percentage * num_lines:
 		ind = random.randint(0, len(Xlearn) - 1)
 		Xtest.append(Xlearn.pop(ind))
 		Ytest.append(Ylearn.pop(ind))
 		Ntest.append(Nlearn.pop(ind))
+		Ptest.append(Plearn.pop(ind))
 		line_count += len(Xtest[-1])
-	return Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest
+	return Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest
+
+# return all indices where the true value was truth but prediction was predicted
+def where_predicted(flat_ytest, flat_yhat, truth, prediction):
+	return np.where((np.asarray(flat_ytest)==truth) & (np.asarray(flat_yhat)==prediction))
