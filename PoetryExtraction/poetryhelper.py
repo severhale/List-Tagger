@@ -23,13 +23,25 @@ crfd = {
 	'rmarg_cn':9, # bool
 	'line1':10, # [0,1]
 	'line2':11, # [0,1]
-	'capital':12, # bool
+	'capital_c':12, # bool
 	'rf_c':13, # [0,1]
 	'rf_pc':14, # [0,1]-[0,1]
 	'rf_cn':15, # [0,1]-[0,1]
 	'lmarg_pn':16,
 	'rmarg_pn':17,
 	'syl_pn':18,
+	'tmarg_c':19,
+	'tmarg_p':20,
+	'bmarg_c':21,
+	'bmarg_n':22,
+	'tbmarg_c':23,
+	'tmarg-line_c':24,
+	'capital_cn':25,
+	'capital_pc':26,
+	'capital_pn':27,
+	'repetition_pc':28,
+	'repetition_cn':29,
+	'repetition_pn':30,
 }
 
 treed = {
@@ -345,7 +357,8 @@ def get_crf_data(tree_clf, X1, names, pages):
 			vec[crfd['line1']] = "1" if linenum==0 else "0"
 			vec[crfd['line2']] = "1" if linenum==1 else "0"
 			linetext = get_line(pages[i][j], linenum)
-			vec[crfd['capital']] = "%s" % linetext[0].text.istitle() if len(linetext)>0 else False
+			curr_word = linetext[0].text if len(linetext)>0 else ''
+			vec[crfd['capital_c']] = "%s" % curr_word.istitle()
 			vec[crfd['rf_c']] = "%s" % tree_guess[j]
 			if j==0:
 				rf_p = "null"
@@ -357,6 +370,30 @@ def get_crf_data(tree_clf, X1, names, pages):
 				rf_n = tree_guess[j+1]
 			vec[crfd['rf_pc']] = "%s-%s" % (rf_p, tree_guess[j])
 			vec[crfd['rf_cn']] = "%s-%s" % (tree_guess[j], rf_n)
+			vec[crfd['tmarg_c']] = "%.1f" % line[treed['tmarg_c']]
+			vec[crfd['tmarg_p']] = "%.1f" % line[treed['tmarg_p']]
+			vec[crfd['bmarg_c']] = "%.1f" % line[treed['bmarg_c']]
+			vec[crfd['bmarg_n']] = "%.1f" % line[treed['bmarg_n']]
+			vec[crfd['tbmarg_c']] = "%s" % (abs(line[treed['tmarg_c']] - line[treed['bmarg_c']])<=.05)
+			vec[crfd['tmarg-line_c']] = "%s-%s" % (vec[crfd['tmarg_c']], (linenum==0 or linenum==1))
+			prev_cap = False
+			prev_word = ''
+			if j>0:
+				prev_line = get_line(pages[i][j-1], int(parse_tag(names[i][j-1])[2]))
+				prev_word = prev_line[0].text if len(prev_line)>0 else ''
+				prev_cap = prev_word.istitle()
+			next_cap = False
+			next_word = ''
+			if j<len(X[i])-1:
+				next_line = get_line(pages[i][j+1], int(parse_tag(names[i][j+1])[2]))
+				next_word = next_line[0].text if len(next_line)>0 else ''
+				next_cap = next_word.istitle()
+			vec[crfd['capital_cn']] = "%s-%s" % (vec[crfd['capital_c']], next_cap)
+			vec[crfd['capital_pc']] = "%s-%s" % (prev_cap, vec[crfd['capital_c']])
+			vec[crfd['capital_pn']] = "%s-%s" % (prev_cap, next_cap)
+			vec[crfd['repetition_pc']] = "%s" % (prev_word.lower()==curr_word.lower())
+			vec[crfd['repetition_cn']] = "%s" % (curr_word.lower()==next_word.lower())
+			vec[crfd['repetition_pn']] = "%s" % (prev_word.lower()==next_word.lower())
 			X[i][j] = make_dict(vec)
 	return X
 
@@ -565,7 +602,8 @@ def uncrfformat(cX, cY, cnames):
 def make_dict(feature_vec):
 	return {invcrfd[i]:feature_vec[i] for i in range(len(feature_vec))}
 
-def splitcrf(X, Y, names, pages, test_percentage):
+def splitcrf(X, Y, names, pages, test_percentage, state=42):
+	random.seed(state)
 	num_lines = sum(len(x) for x in X)
 	line_count = 0
 	Xlearn = X[:]
