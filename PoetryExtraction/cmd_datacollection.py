@@ -46,11 +46,23 @@ def doStuff(stdscr, pages, pg_nums, name):
 				if j>0:
 					j -= 1
 				elif i>0:
-					i -= 1
-					lines = poetryhelper.get_all_lines(pages[i])
-					pg_dim = poetryhelper.get_page_dimensions(pages[i])
-					num = pg_nums[i]
-					j = len(lines) - 1
+					oldi = i
+					oldj = j
+					foundline = False
+					while i>0 and not foundline:
+						i -= 1
+						newlines = poetryhelper.get_all_lines(pages[i])
+						newpg_dim = poetryhelper.get_page_dimensions(pages[i])
+						newnum = pg_nums[i]
+						j = len(newlines) - 1
+						if len(newlines)>0:
+							foundline = True
+							pg_dim = newpg_dim
+							lines = newlines
+							num = newnum
+					if not foundline: # first line in the book at oldi, oldj
+						i = oldi
+						j = oldj
 				if len(data)>0:
 					l = data[-1].split(' ')[0].split('_')
 					# ONLY remove last piece of data if it's the prev line

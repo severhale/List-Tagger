@@ -21,7 +21,7 @@ import scipy.stats
 from poetryhelper import *
 import time;
 
-visualize = True
+visualize = False
 
 #### load svm data file
 X,Y = load_svmlight_file('joined_data')
@@ -90,7 +90,7 @@ if classify_crf:
 	X, Y, names = uncrfformat(X, Y, names)
 pages = pages_from_names(names)
 X, Y, names, pages = crfformat(X, Y, names, pages)
-Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest = splitcrf(X, Y, names, pages, .25)
+Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest = splitcrf(X, Y, names, pages, .5)
 Xdev, Xtest, Ydev, Ytest, Ndev, Ntest, Pdev, Ptest = splitcrf(Xtest, Ytest, Ntest, Ptest, .5)
 Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2, Plearn1, Plearn2 = splitcrf(Xlearn, Ylearn, Nlearn, Plearn, .5)
 

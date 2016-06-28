@@ -5,8 +5,13 @@ from poetryhelper import *
 classification = open('classification', 'r')
 lines = classification.readlines()
 classification.close()
-targets = [i.split(' ')[0].split('_') for i in lines]
-
+targets = []
+for line in lines:
+	split = line.split(' ')[0].split('_')
+	name = '_'.join(split[:-2])
+	number = split[-2]
+	line = split[-1]
+	targets.append([name, number, line])
 freq_dict = pickle.load(open('worddict.p', 'rb'))
 dict_sum = sum(freq_dict.itervalues())
 

@@ -311,33 +311,35 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 	return vec
 
 def get_crf_data(tree_clf, X1, names, pages):
-	X = X1[:]
+	X = []
+	for i in range(len(X1)):
+		X.append(X1[i][:]) # deep copy so as not to change X1
 	# need to go through and get each line referenced
 	for i in range(len(X)):
 		tree_guess = tree_clf.predict(X[i])
 		for j in range(len(X[i])):
 			line = X[i][j]
-			linedata = names[i][j].split('_')
+			linedata = parse_tag(names[i][j])
 			linenum = int(linedata[2])
 			vec = [0] * len(crfd)
 			vec[crfd['syl_c']] = "%d" % line[treed['syl_c']]
-			vec[crfd['syl_pc']] = "%s" % line[treed['syl_p']]==line[treed['syl_c']]
-			vec[crfd['syl_cn']] = "%s" % line[treed['syl_c']]==line[treed['syl_n']]
-			vec[crfd['syl_pn']] = "%s" % line[treed['syl_p']]==line[treed['syl_n']]
+			vec[crfd['syl_pc']] = "%s" % (abs(line[treed['syl_p']]-line[treed['syl_c']]) <= 1)
+			vec[crfd['syl_cn']] = "%s" % (abs(line[treed['syl_c']]-line[treed['syl_n']]) <= 1)
+			vec[crfd['syl_pn']] = "%s" % (abs(line[treed['syl_p']]-line[treed['syl_n']]) <= 1)
 			# vec[crfd['syl_pc']] = "%d-%d" % (line[treed['syl_p']], line[treed['syl_c']])
 			# vec[crfd['syl_cn']] = "%d-%d" % (line[treed['syl_c']], line[treed['syl_n']])
 			vec[crfd['prob_c']] = "%d" % (line[treed['prob_c']]/10)
 			vec[crfd['lmarg_c']] = "%.1f" % line[treed['lmarg_c']]
 			# vec[crfd['lmarg_pc']] = "%.1f-%.1f" % (line[treed['lmarg_p']], line[treed['lmarg_c']])
 			# vec[crfd['lmarg_cn']] = "%.1f-%.1f" % (line[treed['lmarg_c']], line[treed['lmarg_n']])
-			vec[crfd['lmarg_pc']] = "%s" % abs(line[treed['lmarg_p']]-line[treed['lmarg_c']])<=.1
-			vec[crfd['lmarg_cn']] = "%s" % abs(line[treed['lmarg_c']]-line[treed['lmarg_n']])<=.1
-			vec[crfd['lmarg_pn']] = "%s" % abs(line[treed['lmarg_p']]-line[treed['lmarg_n']])<=.1
+			vec[crfd['lmarg_pc']] = "%s" % (abs(line[treed['lmarg_p']]-line[treed['lmarg_c']])<=.05)
+			vec[crfd['lmarg_cn']] = "%s" % (abs(line[treed['lmarg_c']]-line[treed['lmarg_n']])<=.05)
+			vec[crfd['lmarg_pn']] = "%s" % (abs(line[treed['lmarg_p']]-line[treed['lmarg_n']])<=.05)
 			
 			vec[crfd['rmarg_c']] = "%.1f" % line[treed['rmarg_c']]
-			vec[crfd['rmarg_pc']] = "%s" % abs(line[treed['rmarg_p']]-line[treed['rmarg_c']])<=.1
-			vec[crfd['rmarg_cn']] = "%s" % abs(line[treed['rmarg_c']]-line[treed['rmarg_n']])<=.1
-			vec[crfd['rmarg_pn']] = "%s" % abs(line[treed['rmarg_p']]-line[treed['rmarg_n']])<=.1
+			vec[crfd['rmarg_pc']] = "%s" % (abs(line[treed['rmarg_p']]-line[treed['rmarg_c']])<=.05)
+			vec[crfd['rmarg_cn']] = "%s" % (abs(line[treed['rmarg_c']]-line[treed['rmarg_n']])<=.05)
+			vec[crfd['rmarg_pn']] = "%s" % (abs(line[treed['rmarg_p']]-line[treed['rmarg_n']])<=.05)
 			# vec[crfd['rmarg_pc']] = "%.1f-%.1f" % (line[treed['rmarg_p']], line[treed['rmarg_c']])
 			# vec[crfd['rmarg_cn']] = "%.1f-%.1f" % (line[treed['rmarg_c']], line[treed['rmarg_n']])
 			vec[crfd['line1']] = "1" if linenum==0 else "0"
@@ -439,7 +441,7 @@ def clean_word(word):
 # Take a tag in book_page_line format and return the tuple (book, page, line)
 def parse_tag(tag):
 	result = tag.split('_')
-	return result[-3], result[-2], result[-1]
+	return '_'.join(result[:-2]), result[-2], result[-1]
 
 # Concatenate all elements in a list of lists together
 def lsum(list):
@@ -585,4 +587,20 @@ def splitcrf(X, Y, names, pages, test_percentage):
 
 # return all indices where the true value was truth but prediction was predicted
 def where_predicted(flat_ytest, flat_yhat, truth, prediction):
-	return np.where((np.asarray(flat_ytest)==truth) & (np.asarray(flat_yhat)==prediction))
+	return np.where((np.asarray(flat_ytest)==truth) & (np.asarray(flat_yhat)==prediction))[0]
+
+def print_lines(names, pages):
+	lines = [int(i.split('_')[-1]) for i in names]
+	for i in range(len(lines)):
+		print names[i]+": "+get_line_text(get_line(pages[i], lines[i]))
+
+def print_mistakes(Ytest, Yhat, names, pages, truth, prediction):
+	yt = lsum(Ytest)
+	yh = lsum(Yhat)
+	nms = lsum(names)
+	pgs = lsum(pages)
+	indices = where_predicted(yt, yh, truth, prediction)
+	for i in indices:
+		linenum = int(nms[i].split('_')[-1])
+		text = get_line_text(get_line(pgs[i], linenum))
+		print nms[i] + ": " + text
