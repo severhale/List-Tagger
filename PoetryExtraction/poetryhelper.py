@@ -8,7 +8,7 @@ import math
 import random
 import operator
 
-classes = ['0', '1', '2', '3', '4', '5']
+classes = ['0', '1', '2', '3']
 
 crfd = {
 	'syl_c':0, # int
@@ -42,6 +42,7 @@ crfd = {
 	'repetition_pc':28,
 	'repetition_cn':29,
 	'repetition_pn':30,
+	'capital_cn-lmarg_cn':31, # bool-bool-[-1,0,1]
 }
 
 treed = {
@@ -358,7 +359,10 @@ def get_crf_data(tree_clf, X1, names, pages):
 			vec[crfd['line2']] = "1" if linenum==1 else "0"
 			linetext = get_line(pages[i][j], linenum)
 			curr_word = linetext[0].text if len(linetext)>0 else ''
-			vec[crfd['capital_c']] = "%s" % curr_word.istitle()
+			if curr_word.isdigit() and len(linetext)>1:
+				curr_word = linetext[1].text
+			curr_cap = curr_word.istitle()
+			vec[crfd['capital_c']] = "%s" % curr_cap
 			vec[crfd['rf_c']] = "%s" % tree_guess[j]
 			if j==0:
 				rf_p = "null"
@@ -370,23 +374,27 @@ def get_crf_data(tree_clf, X1, names, pages):
 				rf_n = tree_guess[j+1]
 			vec[crfd['rf_pc']] = "%s-%s" % (rf_p, tree_guess[j])
 			vec[crfd['rf_cn']] = "%s-%s" % (tree_guess[j], rf_n)
-			vec[crfd['tmarg_c']] = "%.1f" % line[treed['tmarg_c']]
-			vec[crfd['tmarg_p']] = "%.1f" % line[treed['tmarg_p']]
-			vec[crfd['bmarg_c']] = "%.1f" % line[treed['bmarg_c']]
-			vec[crfd['bmarg_n']] = "%.1f" % line[treed['bmarg_n']]
-			vec[crfd['tbmarg_c']] = "%s" % (abs(line[treed['tmarg_c']] - line[treed['bmarg_c']])<=.05)
+			vec[crfd['tmarg_c']] = "%.1f" % (line[treed['tmarg_c']]*3)
+			vec[crfd['tmarg_p']] = "%.1f" % (line[treed['tmarg_p']]*3)
+			vec[crfd['bmarg_c']] = "%.1f" % (line[treed['bmarg_c']]*3)
+			vec[crfd['bmarg_n']] = "%.1f" % (line[treed['bmarg_n']]*3)
+			vec[crfd['tbmarg_c']] = "%s" % (abs(line[treed['tmarg_c']] - line[treed['bmarg_c']])<=.02)
 			vec[crfd['tmarg-line_c']] = "%s-%s" % (vec[crfd['tmarg_c']], (linenum==0 or linenum==1))
 			prev_cap = False
 			prev_word = ''
 			if j>0:
 				prev_line = get_line(pages[i][j-1], int(parse_tag(names[i][j-1])[2]))
 				prev_word = prev_line[0].text if len(prev_line)>0 else ''
+				if prev_word.isdigit() and len(prev_line)>1:
+					prev_word = prev_line[1].text
 				prev_cap = prev_word.istitle()
 			next_cap = False
 			next_word = ''
 			if j<len(X[i])-1:
 				next_line = get_line(pages[i][j+1], int(parse_tag(names[i][j+1])[2]))
 				next_word = next_line[0].text if len(next_line)>0 else ''
+				if next_word.isdigit() and len(next_line)>1:
+					next_word = next_line[1].text
 				next_cap = next_word.istitle()
 			vec[crfd['capital_cn']] = "%s-%s" % (vec[crfd['capital_c']], next_cap)
 			vec[crfd['capital_pc']] = "%s-%s" % (prev_cap, vec[crfd['capital_c']])
@@ -394,6 +402,12 @@ def get_crf_data(tree_clf, X1, names, pages):
 			vec[crfd['repetition_pc']] = "%s" % (prev_word.lower()==curr_word.lower())
 			vec[crfd['repetition_cn']] = "%s" % (curr_word.lower()==next_word.lower())
 			vec[crfd['repetition_pn']] = "%s" % (prev_word.lower()==next_word.lower())
+			
+			lmarg_sign = 0
+			if vec[crfd['lmarg_cn']]=="False":
+				lmarg_sign = 1 if line[treed['lmarg_n']] > line[treed['lmarg_c']] else -1
+			vec[crfd['capital_cn-lmarg_cn']] = "%s-%s-%d" % (curr_cap, next_cap, lmarg_sign)
+			
 			X[i][j] = make_dict(vec)
 	return X
 
@@ -642,3 +656,9 @@ def print_mistakes(Ytest, Yhat, names, pages, truth, prediction):
 		linenum = int(nms[i].split('_')[-1])
 		text = get_line_text(get_line(pgs[i], linenum))
 		print nms[i] + ": " + text
+
+def print_performance(Ytest, Yhat):
+	yt = lsum(Ytest)
+	yh = lsum(Yhat)
+	print sklearn.metrics.f1_score(yt, yh, average=None)
+	print sklearn.metrics.confusion_matrix(yt, yh)

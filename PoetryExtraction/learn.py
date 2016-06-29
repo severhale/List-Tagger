@@ -25,15 +25,16 @@ visualize = False
 
 #### load svm data file
 X,Y = load_svmlight_file('joined_data')
-target_names = np.array(["Non-Poetry", "Begin Poem", "Middle Poem", "End Poem", "Title", "Author"])
+target_names = np.array(["Non-Poetry", "Begin Poem", "Middle Poem", "End Poem"])
 X = X.toarray()
 Y = Y.astype(int)
+Y[Y>3] = 0
 
 if visualize:
 	XY = np.hstack((X,target_names[np.array(Y)][:,np.newaxis]))
 	feature_names = range(len(X[0]))
 	df = pd.DataFrame(XY)
-	df.columns= feature_names + ["Class"]
+	df.columns = feature_names + ["Class"]
 	df[feature_names] = df[feature_names].astype(float)
 
 #### load datapoint names
@@ -114,6 +115,7 @@ clf = sklearn_crfsuite.CRF(algorithm='pa')
 # }
 # f1_scorer = make_scorer(metrics.flat_f1_score, average='weighted')
 # clf = RandomizedSearchCV(crf, params, cv=5, n_jobs=-1, n_iter=50, scoring=f1_scorer)
+
 CXlearn = get_crf_data(treeclf, Xlearn2, Nlearn2, Plearn2)
 CXtest = get_crf_data(treeclf, Xtest, Ntest, Ptest)
 CXdev = get_crf_data(treeclf, Xdev, Ndev, Pdev)
