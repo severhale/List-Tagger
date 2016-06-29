@@ -7,6 +7,7 @@ import string
 import math
 import random
 import operator
+import sklearn.metrics
 
 classes = ['0', '1', '2', '3']
 
@@ -43,6 +44,8 @@ crfd = {
 	'repetition_cn':29,
 	'repetition_pn':30,
 	'capital_cn-lmarg_cn':31, # bool-bool-[-1,0,1]
+	'lines_remaining':32, # int
+	'punc_end':33, # bool
 }
 
 treed = {
@@ -66,7 +69,9 @@ treed = {
 	'adj':17, # float
 	'pnoun':18, # float
 	'det':19, # float
-	'nums':20 # float
+	'nums':20, # float
+	'plength':21,
+	'cap_lines':22,
 }
 
 invcrfd = {v:k for k,v in crfd.items()}
@@ -321,6 +326,13 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 			vec[treed['pnoun']] = pos[1]
 			vec[treed['det']] = pos[2]
 			vec[treed['nums']] = pos[3]
+			vec[treed['plength']] = plength
+			first_words = []
+			paralines = para.findall(".//LINE")
+			for line in paralines:
+				if len(line) > 0:
+					first_words.append(line[0].text)
+			vec[treed['cap_lines']] = sum(i[0].istitle() for i in first_words)/len(paralines)
 	return vec
 
 def get_crf_data(tree_clf, X1, names, pages):
@@ -402,7 +414,8 @@ def get_crf_data(tree_clf, X1, names, pages):
 			vec[crfd['repetition_pc']] = "%s" % (prev_word.lower()==curr_word.lower())
 			vec[crfd['repetition_cn']] = "%s" % (curr_word.lower()==next_word.lower())
 			vec[crfd['repetition_pn']] = "%s" % (prev_word.lower()==next_word.lower())
-			
+			vec[crfd['lines_remaining']] = "%d" % (len(get_all_lines(pages[i][j])) - linenum)
+			vec[crfd['punc_end']] = "%s" % (linetext[-1].text[-1] in string.punctuation if len(linetext)>0 and len(linetext[-1].text)>0 else False)
 			lmarg_sign = 0
 			if vec[crfd['lmarg_cn']]=="False":
 				lmarg_sign = 1 if line[treed['lmarg_n']] > line[treed['lmarg_c']] else -1
@@ -414,14 +427,12 @@ def get_crf_data(tree_clf, X1, names, pages):
 # Get the feature vector of the specified line as a list of values along with four surrounding lines
 def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec = get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
+	pvec = vec
+	nvec = vec
 	if line_num > 0:
 		pvec = get_single_feature_vec(parent_map, lines, line_num-1, pg_dim, freq_dict, dict_sum)
-	else:
-		pvec = vec
 	if line_num < len(lines):
 		nvec = get_single_feature_vec(parent_map, lines, line_num+1, pg_dim, freq_dict, dict_sum)
-	else:
-		nvec = vec
 	vec[treed['syl_p']] = pvec[treed['syl_c']]
 	vec[treed['syl_n']] = nvec[treed['syl_c']]
 	vec[treed['lmarg_p']] = pvec[treed['lmarg_c']]
@@ -662,3 +673,9 @@ def print_performance(Ytest, Yhat):
 	yh = lsum(Yhat)
 	print sklearn.metrics.f1_score(yt, yh, average=None)
 	print sklearn.metrics.confusion_matrix(yt, yh)
+
+# return a list of tuples of start and end lines of poems
+# def poem_indices(Y, names):
+# 	names = map(parse_tag, names)
+# 	for y,n in zip(Y, names):
+# 		

@@ -19,9 +19,10 @@ from sklearn_crfsuite import metrics
 import sklearn
 import scipy.stats
 from poetryhelper import *
-import time;
+import time
 
 visualize = False
+CRF_EVAL = False
 
 #### load svm data file
 X,Y = load_svmlight_file('joined_data')
@@ -29,6 +30,8 @@ target_names = np.array(["Non-Poetry", "Begin Poem", "Middle Poem", "End Poem"])
 X = X.toarray()
 Y = Y.astype(int)
 Y[Y>3] = 0
+# Y[Y==1] = 2
+# Y[Y==3] = 2
 
 if visualize:
 	XY = np.hstack((X,target_names[np.array(Y)][:,np.newaxis]))
@@ -92,8 +95,8 @@ if classify_crf:
 pages = pages_from_names(names)
 X, Y, names, pages = crfformat(X, Y, names, pages)
 Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest = splitcrf(X, Y, names, pages, .5)
-Xdev, Xtest, Ydev, Ytest, Ndev, Ntest, Pdev, Ptest = splitcrf(Xtest, Ytest, Ntest, Ptest, .5)
-Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2, Plearn1, Plearn2 = splitcrf(Xlearn, Ylearn, Nlearn, Plearn, .5)
+# Xdev, Xtest, Ydev, Ytest, Ndev, Ntest, Pdev, Ptest = splitcrf(Xtest, Ytest, Ntest, Ptest, .5)
+# Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2, Plearn1, Plearn2 = splitcrf(Xlearn, Ylearn, Nlearn, Plearn, .5)
 
 XL1, YL1, NL1 = uncrfformat(Xlearn1, Ylearn1, Nlearn1)
 XL2, YL2, NL2 = uncrfformat(Xlearn2, Ylearn2, Nlearn2)
@@ -107,28 +110,31 @@ print confusion
 print "Tree F1"
 print F1
 
-clf = sklearn_crfsuite.CRF(algorithm='pa')
-# crf = sklearn_crfsuite.CRF(algorithm='lbfgs', max_iterations=100)
-# params = {
-# 	'c1':scipy.stats.expon(scale=.5),
-# 	'c2':scipy.stats.expon(scale=.05),
-# }
-# f1_scorer = make_scorer(metrics.flat_f1_score, average='weighted')
-# clf = RandomizedSearchCV(crf, params, cv=5, n_jobs=-1, n_iter=50, scoring=f1_scorer)
+if CRF_EVAL:
+	clf = sklearn_crfsuite.CRF(algorithm='pa')
+	# crf = sklearn_crfsuite.CRF(algorithm='lbfgs', max_iterations=100)
+	# params = {
+	# 	'c1':scipy.stats.expon(scale=.5),
+	# 	'c2':scipy.stats.expon(scale=.05),
+	# }
+	# f1_scorer = make_scorer(metrics.flat_f1_score, average='weighted')
+	# clf = RandomizedSearchCV(crf, params, cv=5, n_jobs=-1, n_iter=50, scoring=f1_scorer)
 
-CXlearn = get_crf_data(treeclf, Xlearn2, Nlearn2, Plearn2)
-CXtest = get_crf_data(treeclf, Xtest, Ntest, Ptest)
-CXdev = get_crf_data(treeclf, Xdev, Ndev, Pdev)
-clf.fit(CXlearn, Ylearn2, CXdev, Ydev)
-CYhat = clf.predict(CXtest)
+	CXlearn = get_crf_data(treeclf, Xlearn2, Nlearn, Plearn)
+	CXtest = get_crf_data(treeclf, Xtest, Ntest, Ptest)
+	CXdev = get_crf_data(treeclf, Xdev, Ndev, Pdev)
+	clf.fit(CXlearn, Ylearn2, CXdev, Ydev)
+	CYhat = clf.predict(CXtest)
 
-confusion = sklearn.metrics.confusion_matrix(lsum(Ytest), lsum(CYhat))
-F1 = metrics.flat_f1_score(Ytest, CYhat, average=None)
+	confusion = sklearn.metrics.confusion_matrix(lsum(Ytest), lsum(CYhat))
+	F1 = metrics.flat_f1_score(Ytest, CYhat, average=None)
 
-print metrics.flat_accuracy_score(Ytest, CYhat)
-print "F1: ",F1
-print "Confusion Matrix"
-print confusion
+	print metrics.flat_accuracy_score(Ytest, CYhat)
+	print "F1: ",F1
+	print "Confusion Matrix"
+	print confusion
+
+	joblib.dump(clf, "Model/model.pkl")
 
 # param_grid = {'C':[.1,1,10], 'gamma':[.1,1,10]}
 # svc = svm.SVC(kernel='rbf')
@@ -149,4 +155,3 @@ if visualize:
 	plt.show()
 
 joblib.dump(treeclf, "Model/treemodel.pkl")
-joblib.dump(clf, "Model/model.pkl")
