@@ -22,7 +22,7 @@ from poetryhelper import *
 import time
 
 visualize = False
-CRF_EVAL = False
+CRF_EVAL = True
 
 #### load svm data file
 X,Y = load_svmlight_file('joined_data')
@@ -49,66 +49,24 @@ for line in lines:
 	names.append(line[pos:-1]) # -1 to get rid of newline char
 names = np.asarray(names)
 
-# X = X[:,[1,2]]
 
-#### 3-fold crossvalidation w/rbf model
-# param_grid = {'c1':scipy.stats.expon(scale=.5), 'c2':scipy.stats.expon(scale=.05)}
-classify_crf = False
-if classify_crf:
-	clf = sklearn_crfsuite.CRF(algorithm='pa', all_possible_transitions=True)
-	# f1_scorer = make_scorer(metrics.flat_f1_score, average='weighted', labels=target_names)
-	start = time.clock()
-	# clf = RandomizedSearchCV(crf, param_grid, cv=3, verbose=1, n_jobs=-1, n_iter=50, scoring=f1_scorer)
-	print "Beginning data format"
-	start = time.clock()
-	X, Y, names = crfformat(X, Y, names)
-	print "Finished in %.4f seconds" % (time.clock() - start)
-
-	Xlearn, Xtest, Ylearn, Ytest, names_learn, names_test = splitcrf(X, Y, names, .25)
-
-	print "Beginning fit"
-	start = time.clock()
-	clf.fit(Xlearn, Ylearn)
-	print "Finished in %.4f seconds" % (time.clock() - start)
-	# print clf.feature_importances_
-
-	#### create best guess for test data
-	print "Beginning prediction"
-	start = time.clock()
-	Yhat = clf.predict(Xtest)
-	print "Finished prediction in %.4f seconds" % (time.clock() - start)
-	# prob = clf.predict_marginal(Xtest)
-	print metrics.flat_accuracy_score(Ytest, Yhat)
-	confusion = sklearn.metrics.confusion_matrix(lsum(Ytest), lsum(Yhat))
-	# Err  = 1 - metrics.accuracy_score(Ytest, Yhat)
-	F1 = metrics.flat_f1_score(Ytest, Yhat, average=None)
-
-	# print "Predicted:",Yhat
-	# print "Actual:",Ytest
-	print "F1: ",F1
-	# print("Test Error Rate is: %.4f"%(Err,))
-	print "Confusion Matrix"
-	print confusion
-	# print "Probabilities"
-	# print np.hstack((np.reshape(names_test, (len(names_test), 1))[Ytest==1], prob[Ytest==1]))
-	X, Y, names = uncrfformat(X, Y, names)
 pages = pages_from_names(names)
 X, Y, names, pages = crfformat(X, Y, names, pages)
-Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest = splitcrf(X, Y, names, pages, .5)
-# Xdev, Xtest, Ydev, Ytest, Ndev, Ntest, Pdev, Ptest = splitcrf(Xtest, Ytest, Ntest, Ptest, .5)
-# Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2, Plearn1, Plearn2 = splitcrf(Xlearn, Ylearn, Nlearn, Plearn, .5)
+Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest = splitcrf(X, Y, names, pages, .2)
+Xdev, Xtest, Ydev, Ytest, Ndev, Ntest, Pdev, Ptest = splitcrf(Xtest, Ytest, Ntest, Ptest, .5)
+Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2, Plearn1, Plearn2 = splitcrf(Xlearn, Ylearn, Nlearn, Plearn, .6)
 
-XL1, YL1, NL1 = uncrfformat(Xlearn1, Ylearn1, Nlearn1)
-XL2, YL2, NL2 = uncrfformat(Xlearn2, Ylearn2, Nlearn2)
-treeclf = RandomForestClassifier(n_estimators=40, criterion='entropy', max_features='auto', bootstrap=True, oob_score=True, n_jobs=2, class_weight="balanced", random_state=random.randint(1, 100))
-treeclf.fit(XL1, YL1)
-Yhat = treeclf.predict(XL2)
-confusion = sklearn.metrics.confusion_matrix(YL2, Yhat)
-F1 = sklearn.metrics.f1_score(YL2, Yhat, average=None)
-print "Tree Confusion"
-print confusion
-print "Tree F1"
-print F1
+XL, YL, NL = uncrfformat(Xlearn1, Ylearn1, Nlearn1)
+XT, YT, NT = uncrfformat(Xlearn2, Ylearn2, Nlearn2)
+YL = np.asarray(YL)
+YT = np.asarray(YT)
+YL[YL!='0']='2'
+YT[YT!='0']='2'
+treeclf = RandomForestClassifier(n_estimators=40, criterion='entropy', max_features='auto', bootstrap=True, oob_score=True, n_jobs=2, class_weight="balanced", random_state=42)
+treeclf.fit(XL, YL)
+Yhat = treeclf.predict(XT)
+print "======TREE PERFORMANCE======"
+print_performance(YT, Yhat)
 
 if CRF_EVAL:
 	clf = sklearn_crfsuite.CRF(algorithm='pa')
@@ -119,34 +77,34 @@ if CRF_EVAL:
 	# }
 	# f1_scorer = make_scorer(metrics.flat_f1_score, average='weighted')
 	# clf = RandomizedSearchCV(crf, params, cv=5, n_jobs=-1, n_iter=50, scoring=f1_scorer)
+	t=.1
+	learnguesses = [treeclf.predict(chunk) for chunk in Xlearn2]
+	testguesses = [treeclf.predict(chunk) for chunk in Xtest]
+	devguesses = [treeclf.predict(chunk) for chunk in Xdev]
 
-	CXlearn = get_crf_data(treeclf, Xlearn2, Nlearn, Plearn)
-	CXtest = get_crf_data(treeclf, Xtest, Ntest, Ptest)
-	CXdev = get_crf_data(treeclf, Xdev, Ndev, Pdev)
+# def f():
+# 	learnguesses = [y[:] for y in Ylearn2]
+# 	testguesses = [y[:] for y in Ytest]
+# 	devguesses = [y[:] for y in Ydev]
+# 	for guesses in [learnguesses, testguesses, devguesses]:
+# 		for i in range(len(guesses)):
+# 			for j in range(len(guesses[i])):
+# 				# if guesses[i][j]!='0':
+# 				# 	guesses[i][j]='2'
+# 				# if random.random()<t:
+# 				guesses[i][j] = random.choice(['0', '2'])
+# 	return learnguesses, testguesses, devguesses
+	# learnguesses, testguesses, devguesses = f()
+
+	CXlearn = get_crf_data(learnguesses, Xlearn2, Nlearn2, Plearn2)
+	CXtest = get_crf_data(testguesses, Xtest, Ntest, Ptest)
+	CXdev = get_crf_data(devguesses, Xdev, Ndev, Pdev)
 	clf.fit(CXlearn, Ylearn2, CXdev, Ydev)
 	CYhat = clf.predict(CXtest)
-
-	confusion = sklearn.metrics.confusion_matrix(lsum(Ytest), lsum(CYhat))
-	F1 = metrics.flat_f1_score(Ytest, CYhat, average=None)
-
-	print metrics.flat_accuracy_score(Ytest, CYhat)
-	print "F1: ",F1
-	print "Confusion Matrix"
-	print confusion
+	print "======CRF PERFORMANCE======"
+	print_performance(lsum(Ytest), lsum(CYhat))
 
 	joblib.dump(clf, "Model/model.pkl")
-
-# param_grid = {'C':[.1,1,10], 'gamma':[.1,1,10]}
-# svc = svm.SVC(kernel='rbf')
-# svcclf = GridSearchCV(svc, param_grid)
-# svcclf.fit(Xlearn, Ylearn)
-# Yhat = svcclf.predict(Ytest)
-# confusion = sklearn.metrics.confusion_matrix(Ytest, Yhat)
-# F1 = sklearn.metrics.f1_score(Ytest, Yhat, average=None)
-# print "SVC Confusion"
-# print confusion
-# print "SVC F1"
-# print F1
 
 if visualize:
 	scatter_matrix(df, alpha=0.2, figsize=(8, 8), diagonal='none');

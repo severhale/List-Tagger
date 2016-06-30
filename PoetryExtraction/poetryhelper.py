@@ -335,13 +335,13 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 			vec[treed['cap_lines']] = sum(i[0].istitle() for i in first_words)/len(paralines)
 	return vec
 
-def get_crf_data(tree_clf, X1, names, pages):
+def get_crf_data(tree_guesses, X1, names, pages):
 	X = []
 	for i in range(len(X1)):
 		X.append(X1[i][:]) # deep copy so as not to change X1
 	# need to go through and get each line referenced
 	for i in range(len(X)):
-		tree_guess = tree_clf.predict(X[i])
+		tree_guess = tree_guesses[i]
 		for j in range(len(X[i])):
 			line = X[i][j]
 			linedata = parse_tag(names[i][j])
@@ -668,14 +668,44 @@ def print_mistakes(Ytest, Yhat, names, pages, truth, prediction):
 		text = get_line_text(get_line(pgs[i], linenum))
 		print nms[i] + ": " + text
 
+# Given poems, a list of tuples of start and end indices, find how many poems
+# were classified perfectly in their entirety
 def print_performance(Ytest, Yhat):
-	yt = lsum(Ytest)
-	yh = lsum(Yhat)
-	print sklearn.metrics.f1_score(yt, yh, average=None)
-	print sklearn.metrics.confusion_matrix(yt, yh)
+	print sklearn.metrics.confusion_matrix(Ytest, Yhat)
+	print sklearn.metrics.f1_score(Ytest, Yhat, average=None)
 
 # return a list of tuples of start and end lines of poems
-# def poem_indices(Y, names):
-# 	names = map(parse_tag, names)
-# 	for y,n in zip(Y, names):
-# 		
+def poem_indices(Y, names, pages):
+	parsed_names = map(parse_tag, names)
+	indices = []
+	in_poem = False
+	prev_line = None
+	prev_page = None
+	for i in range(len(Y)):
+		y = Y[i]
+		n = parsed_names[i]
+		p = pages[i]
+		tag = int(y)
+		if i == 0:
+			if tag == 1:
+				in_poem = True
+		else:
+			if in_poem:
+				try:
+					if n[0] == prev_line[0] and check_adjacent(int(prev_line[1]), int(prev_line[2]), int(n[1]), int(n[2]), prev_page):
+						if tag == 3:
+							indices[-1] += (i,)
+							in_poem = False
+					else:
+						print "Poem cut off halfway through! Ended at %s" % (list(n))
+						in_poem = False
+						del indices[-1]
+				except:
+					print "Error at %s" % (list(n))
+			else:
+				if tag == 1:
+					in_poem = True
+					indices.append((i,))
+		prev_page = p
+		prev_line = n
+	return indices
