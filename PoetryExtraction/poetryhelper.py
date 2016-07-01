@@ -8,6 +8,7 @@ import math
 import random
 import operator
 import sklearn.metrics
+import itertools
 
 classes = ['0', '1', '2', '3']
 
@@ -66,15 +67,16 @@ treed = {
 	'bmarg_p':14, # float
 	'bmarg_n':15, # float
 	'linenum':16, # int
-	'adj':17, # float
-	'pnoun':18, # float
-	'det':19, # float
-	'nums':20, # float
-	'plength':21,
-	'cap_lines':22,
+	'pnoun':17, # float
+	'nums':18, # float
+	'plength':19,
+	'cap_lines':20,
+	'adj':21,
+	'det':22,
 }
 
 invcrfd = {v:k for k,v in crfd.items()}
+invtreed = {v:k for k,v in treed.items()}
 
 words = nltk.corpus.cmudict.dict()
 
@@ -203,7 +205,7 @@ def pos_count(line):
 	counts = counts.astype(float)
 	counts /= total
 	result = []
-	for c in ['JJ', 'NNP', 'DT', 'CD']:
+	for c in ['NNP', 'CD', 'JJ', 'DT']:
 		if c in unique:
 			result.append(counts[unique==c][0])
 		else:
@@ -246,7 +248,7 @@ def get_feature_table_pg(parent_map, page, freq_dict, dict_sum):
 	data = []
 	for i in range(len(lines)):
 		tags.append("%s_%s_%d" % (name, num, i))
-		data.append(get_single_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
+		data.append(get_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
 	result = data
 	# result = [lsum([getelement(data, j) for j in range(i-2,i+3)]) for i in range(len(data))]
 	return tags, result
@@ -322,10 +324,10 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 			vec[treed['tmarg_c']] = margins[2]
 			vec[treed['bmarg_c']] = margins[3]
 			vec[treed['linenum']] = line_num
-			vec[treed['adj']] = pos[0]
-			vec[treed['pnoun']] = pos[1]
-			vec[treed['det']] = pos[2]
-			vec[treed['nums']] = pos[3]
+			vec[treed['pnoun']] = pos[0]
+			vec[treed['nums']] = pos[1]
+			vec[treed['adj']] = pos[2]
+			vec[treed['det']] = pos[3]
 			vec[treed['plength']] = plength
 			first_words = []
 			paralines = para.findall(".//LINE")
@@ -333,6 +335,36 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 				if len(line) > 0:
 					first_words.append(line[0].text)
 			vec[treed['cap_lines']] = sum(i[0].istitle() for i in first_words)/len(paralines)
+	return vec
+
+# Get the feature vector of the specified line as a list of values along with four surrounding lines
+def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
+	vec = get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
+	pvec = vec
+	nvec = vec
+	prev_word = ''
+	next_word = ''
+	curr_word = ''
+	if line_num > 0:
+		if len(lines[line_num-1])>0:
+			prev_word = lines[line_num-1][0].text.lower()
+		pvec = get_single_feature_vec(parent_map, lines, line_num-1, pg_dim, freq_dict, dict_sum)
+	if line_num < len(lines)-1:
+		if len(lines[line_num+1])>0:
+			next_word = lines[line_num+1][0].text.lower()
+		nvec = get_single_feature_vec(parent_map, lines, line_num+1, pg_dim, freq_dict, dict_sum)
+	if len(lines[line_num])>0:
+			prev_word = lines[line_num][0].text.lower()
+	vec[treed['syl_p']] = pvec[treed['syl_c']]
+	vec[treed['syl_n']] = nvec[treed['syl_c']]
+	vec[treed['lmarg_p']] = pvec[treed['lmarg_c']]
+	vec[treed['lmarg_n']] = nvec[treed['lmarg_c']]
+	vec[treed['rmarg_p']] = pvec[treed['rmarg_c']]
+	vec[treed['rmarg_n']] = nvec[treed['rmarg_c']]
+	vec[treed['bmarg_p']] = pvec[treed['bmarg_c']]
+	vec[treed['bmarg_n']] = nvec[treed['bmarg_c']]
+	vec[treed['tmarg_p']] = pvec[treed['tmarg_c']]
+	vec[treed['tmarg_n']] = nvec[treed['tmarg_c']]
 	return vec
 
 def get_crf_data(tree_guesses, X1, names, pages):
@@ -423,27 +455,6 @@ def get_crf_data(tree_guesses, X1, names, pages):
 			
 			X[i][j] = make_dict(vec)
 	return X
-
-# Get the feature vector of the specified line as a list of values along with four surrounding lines
-def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
-	vec = get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
-	pvec = vec
-	nvec = vec
-	if line_num > 0:
-		pvec = get_single_feature_vec(parent_map, lines, line_num-1, pg_dim, freq_dict, dict_sum)
-	if line_num < len(lines):
-		nvec = get_single_feature_vec(parent_map, lines, line_num+1, pg_dim, freq_dict, dict_sum)
-	vec[treed['syl_p']] = pvec[treed['syl_c']]
-	vec[treed['syl_n']] = nvec[treed['syl_c']]
-	vec[treed['lmarg_p']] = pvec[treed['lmarg_c']]
-	vec[treed['lmarg_n']] = nvec[treed['lmarg_c']]
-	vec[treed['rmarg_p']] = pvec[treed['rmarg_c']]
-	vec[treed['rmarg_n']] = nvec[treed['rmarg_c']]
-	vec[treed['bmarg_p']] = pvec[treed['bmarg_c']]
-	vec[treed['bmarg_n']] = nvec[treed['bmarg_c']]
-	vec[treed['tmarg_p']] = pvec[treed['tmarg_c']]
-	vec[treed['tmarg_n']] = nvec[treed['tmarg_c']]
-	return vec
 
 # Find the log-product probability that a line fits the language model contained in freq_dict. dict_sum is the sum of all frequencies of words in the model
 def get_probability(line, freq_dict, dict_sum):
@@ -627,7 +638,7 @@ def uncrfformat(cX, cY, cnames):
 def make_dict(feature_vec):
 	return {invcrfd[i]:feature_vec[i] for i in range(len(feature_vec))}
 
-def splitcrf(X, Y, names, pages, test_percentage, state=42):
+def splitcrf(X, Y, names, pages, test_percentage, state=None):
 	random.seed(state)
 	num_lines = sum(len(x) for x in X)
 	line_count = 0
