@@ -10,7 +10,7 @@ fname = '../../500Poems'
 clf = joblib.load("Model/treemodel.pkl")
 freq_dict = pickle.load(open('worddict.p', 'rb'))
 
-out_name = '500 Poems Results/results'
+out_name = '500 Poems Results/ambiguous_results'
 if not os.path.exists(os.path.dirname(out_name)):
 	try:
 		os.makedirs(os.path.dirname(out_name))
@@ -27,8 +27,8 @@ for book_file in os.listdir(os.getcwd() + '/' + fname):
 		tags, data = poetryhelper.easy_feature_table(pages, freq_dict)
 		results = clf.predict_proba(data)[:,1]
 
-		posmask = (results>=.95)
-		negmask = (results<=.05)
+		posmask = (results<=.65) & (results >=.5)
+		negmask = (results<=.5) & (results>=.35)
 		poems = results[posmask]
 		nonpoems = results[negmask]
 		ptags = tags[posmask]

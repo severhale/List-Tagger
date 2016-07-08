@@ -95,11 +95,8 @@ names = np.asarray(names)
 
 # pages = pages_from_names(names)
 # X, Y, names, pages = crfformat(X, Y, names, pages)
-results = []
 for i in range(1):
-	# Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest = splitcrf(X, Y, names, pages, .2)
-	# Xdev, Xtest, Ydev, Ytest, Ndev, Ntest, Pdev, Ptest = splitcrf(Xtest, Ytest, Ntest, Ptest, .5)
-	# Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2, Plearn1, Plearn2 = splitcrf(Xlearn, Ylearn, Nlearn, Plearn, .625)
+	
 	# XL, YL, NL = uncrfformat(Xlearn1, Ylearn1, Nlearn1)
 	# XT, YT, NT = uncrfformat(Xlearn2, Ylearn2, Nlearn2)
 	XL, XT, YL, YT, NL, NT = split_books(X, Y, names)
@@ -111,9 +108,11 @@ for i in range(1):
 	Yhat = treeclf.predict(XT)
 	print "======TREE PERFORMANCE======"
 	print_performance(YT, Yhat)
-	results.append(sklearn.metrics.f1_score(YT, Yhat, average=None))
 
 	if CRF_EVAL:
+		# Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest = splitcrf(X, Y, names, pages, .2)
+		# Xdev, Xtest, Ydev, Ytest, Ndev, Ntest, Pdev, Ptest = splitcrf(Xtest, Ytest, Ntest, Ptest, .5)
+		# Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2, Plearn1, Plearn2 = splitcrf(Xlearn, Ylearn, Nlearn, Plearn, .625)
 		clf = sklearn_crfsuite.CRF(algorithm='pa')
 		# crf = sklearn_crfsuite.CRF(algorithm='lbfgs', max_iterations=100)
 		# params = {

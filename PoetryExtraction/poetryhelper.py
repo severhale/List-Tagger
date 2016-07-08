@@ -73,6 +73,16 @@ treed = {
 	'cap_lines':20,
 	'adj':21,
 	'det':22,
+	'cap_c':23,
+	'cap_p':24,
+	'cap_n':25,
+	'lines_remaining':26,
+	'mean_line_length':27,
+	'std_line_length':28,
+	'mean_lmarg':29,
+	'std_lmarg':30,
+	'mean_rmarg':31,
+	'std_rmarg':32,
 }
 
 invcrfd = {v:k for k,v in crfd.items()}
@@ -274,41 +284,34 @@ def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_
 # Get feature vector of just the line specified with no neighbor data as a list of values
 def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec = [0] * len(treed)
+	got_vec = False
 	if line_num < len(lines) and line_num >= 0:
 		line = lines[line_num]
-		if len(line.findall(".//WORD")) > 0:
+		if len(line) > 0:
 			first_pos = get_word_pos(line[0])
 			last_pos = get_word_pos(line[-1])
 			l_margin = first_pos[0]
 			r_margin = pg_dim[0] - last_pos[0]
 			t_margin = 0
 			b_margin = 0
-			found_prev = True
+			found_prev = False
 			if line_num > 0:
 				prev_line = lines[line_num - 1]
 				if len(prev_line) > 0:
 					prev_pos = get_word_pos(prev_line[0])
 					if prev_pos[1] < first_pos[1]:
 						t_margin = first_pos[1] - prev_pos[1]
-					else:
-						found_prev = False
-				else:
-					found_prev = False
+						found_prev = True
 			if not found_prev:
 				t_margin = first_pos[1]
-			found_next = True
+			found_next = False
 			if line_num < len(lines) - 1:
 				next_line = lines[line_num + 1]
 				if len(next_line) > 0:
 					next_pos = get_word_pos(next_line[0])
 					if next_pos[1] > first_pos[1]:
 						b_margin = next_pos[1] - first_pos[1]
-					else:
-						found_next = False
-				else:
-					found_next = False
-			else:
-				found_next = False
+						found_next = True
 			if not found_next:
 				b_margin = pg_dim[1] - first_pos[1]
 			syllables = syllable_count(line)
@@ -324,6 +327,7 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 			vec[treed['tmarg_c']] = margins[2]
 			vec[treed['bmarg_c']] = margins[3]
 			vec[treed['linenum']] = line_num
+			vec[treed['lines_remaining']] = len(lines)-line_num
 			vec[treed['pnoun']] = pos[0]
 			vec[treed['nums']] = pos[1]
 			vec[treed['adj']] = pos[2]
@@ -335,11 +339,30 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 				if len(line) > 0:
 					first_words.append(line[0].text)
 			vec[treed['cap_lines']] = sum(i[0].istitle() for i in first_words)/len(paralines)
-	return vec
+			vec[treed['cap_c']] = 1 if line.find(".//WORD").text.istitle() else 0
+			lmargins = []
+			rmargins = []
+			for l in lines:
+				if len(l) > 0:
+					first_pos = get_word_pos(l[0])
+					last_pos = get_word_pos(l[-1])
+					lmargins.append(first_pos[0])
+					rmargins.append(pg_dim[0] - last_pos[0])
+			vec[treed['mean_lmarg']] = np.mean(lmargins)
+			vec[treed['std_lmarg']] = np.std(lmargins)
+			vec[treed['mean_rmarg']] = np.mean(rmargins)
+			vec[treed['std_rmarg']] = np.std(rmargins)
+			llengths = map(lambda x:len(x.findall(".//WORD")), lines)
+			vec[treed['mean_line_length']] = np.mean(llengths)
+			vec[treed['std_line_length']] = np.std(llengths)
+			got_vec = True
+	return vec if got_vec else None
 
 # Get the feature vector of the specified line as a list of values along with four surrounding lines
 def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec = get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
+	if vec == None:
+		vec = [0]*len(treed)
 	pvec = vec
 	nvec = vec
 	prev_word = ''
@@ -347,14 +370,18 @@ def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 	curr_word = ''
 	if line_num > 0:
 		if len(lines[line_num-1])>0:
-			prev_word = lines[line_num-1][0].text.lower()
+			prev_word = lines[line_num-1][0].text
 		pvec = get_single_feature_vec(parent_map, lines, line_num-1, pg_dim, freq_dict, dict_sum)
 	if line_num < len(lines)-1:
 		if len(lines[line_num+1])>0:
-			next_word = lines[line_num+1][0].text.lower()
+			next_word = lines[line_num+1][0].text
 		nvec = get_single_feature_vec(parent_map, lines, line_num+1, pg_dim, freq_dict, dict_sum)
 	if len(lines[line_num])>0:
-			prev_word = lines[line_num][0].text.lower()
+			prev_word = lines[line_num][0].text
+	if pvec == None:
+		pvec = vec
+	if nvec == None:
+		nvec = vec
 	vec[treed['syl_p']] = pvec[treed['syl_c']]
 	vec[treed['syl_n']] = nvec[treed['syl_c']]
 	vec[treed['lmarg_p']] = pvec[treed['lmarg_c']]
@@ -365,6 +392,21 @@ def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec[treed['bmarg_n']] = nvec[treed['bmarg_c']]
 	vec[treed['tmarg_p']] = pvec[treed['tmarg_c']]
 	vec[treed['tmarg_n']] = nvec[treed['tmarg_c']]
+	vec[treed['cap_p']] = pvec[treed['cap_c']]
+	vec[treed['cap_n']] = nvec[treed['cap_c']]
+	# nnvec = get_single_feature_vec(parent_map, lines, line_num+2, pg_dim, freq_dict, dict_sum)
+	# if nnvec == None:
+	# 	nnvec = nvec
+	# ppvec = get_single_feature_vec(parent_map, lines, line_num-2, pg_dim, freq_dict, dict_sum)
+	# if ppvec == None:
+	# 	ppvec = pvec
+	# nnnvec = get_single_feature_vec(parent_map, lines, line_num+3, pg_dim, freq_dict, dict_sum)
+	# if nnnvec == None:
+	# 	nnnvec = nvec
+	# pppvec = get_single_feature_vec(parent_map, lines, line_num-3, pg_dim, freq_dict, dict_sum)
+	# if pppvec == None:
+	# 	pppvec = pvec
+	# return pppvec + ppvec + vec + nnvec + nnnvec
 	return vec
 
 def get_crf_data(tree_guesses, X1, names, pages):
