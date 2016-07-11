@@ -9,16 +9,15 @@ from poetryhelper import *
 if len(sys.argv) != 3:
 	print "Invalid arguments! Must have input and output files only."
 	exit()
-
-clf = joblib.load("Model/treemodel.pkl")
-freq_dict = pickle.load(open('worddict.p', 'rb'))
-
 out_name = sys.argv[2]
 if os.path.dirname(out_name)!='' and not os.path.exists(os.path.dirname(out_name)):
 	try:
 		os.makedirs(os.path.dirname(out_name))
 	except:
-		print "Couldn't create directory!"
+		print "Couldn't create output directory!"
+		exit()
+
+freq_dict = pickle.load(open('worddict.p', 'rb'))
 
 book_counter = 0
 start_time = time.time()
@@ -27,13 +26,9 @@ with open(sys.argv[1], 'r') as f:
 	books = [line.strip() for line in f.readlines()]
 for book_file in books:
 	try:
-		pages = get_pg_iterator(book_file)
-		pg_nums = get_page_numbers(pages)
+		pages = list(get_pg_iterator(book_file))
 		tags, data = easy_feature_table(pages, freq_dict)
-		results = clf.predict_proba(data)[:,1]
-		with open(out_name, 'a') as f:
-			for i in range(len(results)):
-				f.write("%s:%.4f" % (tags[i],results[i]))
+		save_data_target(data, tags, out_name)
 		book_counter += 1
 		print "Book count is %d after %.2f minutes" % (book_counter, (time.time() - start_time)/60)
 	except Exception as ex:
