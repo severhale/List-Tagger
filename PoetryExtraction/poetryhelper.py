@@ -238,14 +238,15 @@ def get_feature_table(parent_map, pages, freq_dict, dict_sum):
 	data = []
 	tags = []
 	for i in range(len(pages)):
-	 	ltags, ldata = get_feature_table_pg(parent_map, pages[i], freq_dict, dict_sum)
+	 	ltags, ldata = get_feature_table_pg(parent_map, pages, i, freq_dict, dict_sum)
 		if len(ldata) > 0:
 			data += ldata
 			tags += ltags
 	return np.asarray(tags), np.vstack(data)
 
 # Get a numpy array containing all single feature vectors of all lines on the page specified
-def get_feature_table_pg(parent_map, page, freq_dict, dict_sum):
+def get_feature_table_pg(parent_map, pages, pg_num, freq_dict, dict_sum):
+	page = pages[pg_num]
 	lines = get_all_lines(page)
 	pg_dim = get_page_dimensions(page)
 	name = get_book_name([page])
@@ -258,7 +259,8 @@ def get_feature_table_pg(parent_map, page, freq_dict, dict_sum):
 	data = []
 	for i in range(len(lines)):
 		tags.append("%s_%s_%d" % (name, num, i))
-		data.append(get_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
+		# data.append(get_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
+		data.append(get_feature_vec_pg(parent_map, pages, pg_num, i, freq_dict, dict_sum))
 	result = data
 	# result = [lsum([getelement(data, j) for j in range(i-2,i+3)]) for i in range(len(data))]
 	return tags, result
@@ -274,10 +276,16 @@ def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_
 	next_lines=[]
 	if line_num < 1:
 		if page_index > 0:
-			prev_lines = get_all_lines(pages[page_index-1])
+			try:
+				prev_lines.append(get_all_lines(pages[page_index-1])[-1])
+			except:
+				pass
 	if line_num > len(lines)-2:
 		if page_index < len(pages)-1:
-			next_lines = get_all_lines(pages[page_index-1])
+			try:
+				next_lines.append(get_all_lines(pages[page_index-1])[0])
+			except:
+				pass
 	result = get_feature_vec(parent_map, prev_lines+lines+next_lines, line_num+len(prev_lines), pg_dim, freq_dict, dict_sum)
 	return result
 
@@ -762,3 +770,95 @@ def poem_indices(Y, names, pages):
 		prev_page = p
 		prev_line = n
 	return indices
+
+# p: Proabability from 0 to 1 that truth data is replaced with noise
+def simulate_data(p):
+	learnguesses = [y[:] for y in Ylearn]
+	testguesses = [y[:] for y in Ytest]
+	devguesses = [y[:] for y in Ydev]
+	for guesses in [learnguesses, testguesses, devguesses]:
+		for i in range(len(guesses)):
+			for j in range(len(guesses[i])):
+				if random.random()<p:
+					guesses[i][j] = random.choice(['0', '2'])
+				elif guesses[i][j]!='0':
+						guesses[i][j]='2'
+	return learnguesses, testguesses, devguesses
+
+def feature_importances(tree):
+	imp = tree.feature_importances_
+	feature_names = map(operator.itemgetter(0), sorted(treed.items(), key=operator.itemgetter(1)))
+	return np.asarray(sorted(zip(feature_names, imp), key=operator.itemgetter(1)))
+
+def split_books(X, Y, names, test_percent=.2):
+	Xlearn = X[:]
+	Ylearn = Y[:]
+	Nlearn = names[:]
+	books = np.asarray([parse_tag(i)[0] for i in names])
+	Xtest = []
+	Ytest = []
+	Ntest = []
+	line_count = 0
+	while line_count < test_percent * len(X):
+		book = random.choice(np.unique(books))
+		# get indices of all lines from that book, move to test
+		mask = (books==book)
+		Xtest += [line for line in Xlearn[mask]]
+		Ytest += [line for line in Ylearn[mask]]
+		Ntest += [line for line in Nlearn[mask]]
+		Xlearn = Xlearn[~mask]
+		Ylearn = Ylearn[~mask]
+		Nlearn = Nlearn[~mask]
+		books = books[~mask]
+		line_count += sum(mask)
+	return Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest
+
+def subtest(XL, YL, XT, YT, feature_names):
+	nfeatures = XL.shape[1]
+	model = treeclf
+	rfe = RFE(model, nfeatures-1)
+	print "BEFORE"
+	model.fit(XL, YL)
+	print_performance(YT, model.predict(XT))
+	print "AFTER"
+	rfe.fit(XL, YL)
+	print_performance(YT, rfe.predict(XT))
+	print "REMOVED FEATURE %s" % (feature_names[np.where(rfe.support_==False)[0][0]])
+	print ""
+	return rfe.transform(XL), rfe.transform(XT), feature_names[rfe.support_]
+
+def test(XL, YL, XT, YT, feature_names):
+	while XL.shape[1]>0:
+		XL, XT, feature_names = subtest(XL, YL, XT, YT, feature_names)
+
+def cvtest(n, model, X, Y, names):
+	results = []
+	for i in range(n):
+		XL, XT, YL, YT, NL, NT = split_books(X, Y, names)
+		model.fit(XL, YL)
+		results.append(sklearn.metrics.f1_score(YT, model.predict(XT), average=None)[1])
+	return np.mean(results), np.std(results)
+
+# perform leave one out on each book and return a list of models
+# and a list of their respective f1 scores
+def loo_validation_model(model, X, Y, names):
+	classifiers = []
+	# results = []
+	X = np.asarray(X)
+	Y = np.asarray(Y)
+	names = np.asarray(map(parse_tag, names))[:,0]
+	for book in np.unique(names):
+		clf = sklearn.base.clone(model)
+		XL = X[names!=book]
+		YL = Y[names!=book]
+		XT = X[names==book]
+		YT = Y[names==book]
+		clf.fit(XL, YL)
+		YH = clf.predict(XT)
+		classifiers.append(clf)
+		# results.append(sklearn.metrics.f1_score(YT, YH, average=None))
+	clf = classifiers[0]
+	for i in range(1, len(classifiers)):
+		clf.estimators_ += classifiers[i].estimators_
+		clf.n_estimators = len(clf.estimators_)
+	return clf

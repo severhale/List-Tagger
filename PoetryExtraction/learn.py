@@ -22,48 +22,6 @@ import scipy.stats
 from poetryhelper import *
 import time
 
-# p: Proabability from 0 to 1 that truth data is replaced with noise
-def simulate_data(p):
-	learnguesses = [y[:] for y in Ylearn]
-	testguesses = [y[:] for y in Ytest]
-	devguesses = [y[:] for y in Ydev]
-	for guesses in [learnguesses, testguesses, devguesses]:
-		for i in range(len(guesses)):
-			for j in range(len(guesses[i])):
-				if random.random()<p:
-					guesses[i][j] = random.choice(['0', '2'])
-				elif guesses[i][j]!='0':
-						guesses[i][j]='2'
-	return learnguesses, testguesses, devguesses
-
-def feature_importances(tree):
-	imp = tree.feature_importances_
-	feature_names = map(operator.itemgetter(0), sorted(treed.items(), key=operator.itemgetter(1)))
-	return np.asarray(sorted(zip(feature_names, imp), key=operator.itemgetter(1)))
-
-def split_books(X, Y, names):
-	Xlearn = X[:]
-	Ylearn = Y[:]
-	Nlearn = names[:]
-	books = np.asarray([parse_tag(i)[0] for i in names])
-	Xtest = []
-	Ytest = []
-	Ntest = []
-	line_count = 0
-	while line_count < .2 * len(X):
-		book = random.choice(np.unique(books))
-		# get indices of all lines from that book, move to test
-		mask = (books==book)
-		Xtest += [line for line in Xlearn[mask]]
-		Ytest += [line for line in Ylearn[mask]]
-		Ntest += [line for line in Nlearn[mask]]
-		Xlearn = Xlearn[~mask]
-		Ylearn = Ylearn[~mask]
-		Nlearn = Nlearn[~mask]
-		books = books[~mask]
-		line_count += sum(mask)
-	return Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest
-
 visualize = False
 CRF_EVAL = False
 
@@ -95,63 +53,62 @@ names = np.asarray(names)
 
 # pages = pages_from_names(names)
 # X, Y, names, pages = crfformat(X, Y, names, pages)
-for i in range(1):
 	
-	# XL, YL, NL = uncrfformat(Xlearn1, Ylearn1, Nlearn1)
-	# XT, YT, NT = uncrfformat(Xlearn2, Ylearn2, Nlearn2)
-	XL, XT, YL, YT, NL, NT = split_books(X, Y, names)
+# XL, YL, NL = uncrfformat(Xlearn1, Ylearn1, Nlearn1)
+# XT, YT, NT = uncrfformat(Xlearn2, Ylearn2, Nlearn2)
+XL, XT, YL, YT, NL, NT = split_books(X, Y, names)
+YL = np.asarray(YL)
+YT = np.asarray(YT)
+treeclf = RandomForestClassifier(n_estimators=40, criterion='entropy', max_features='auto', bootstrap=True, oob_score=True, n_jobs=2, class_weight="balanced", random_state=42)
+# clf = AdaBoostCLassifier(n_estimators=100)
+treeclf.fit(XL, YL)
+Yhat = treeclf.predict(XT)
+print "======TREE PERFORMANCE======"
+print_performance(YT, Yhat)
+
+if CRF_EVAL:
+	# Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest = splitcrf(X, Y, names, pages, .2)
+	# Xdev, Xtest, Ydev, Ytest, Ndev, Ntest, Pdev, Ptest = splitcrf(Xtest, Ytest, Ntest, Ptest, .5)
+	# Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2, Plearn1, Plearn2 = splitcrf(Xlearn, Ylearn, Nlearn, Plearn, .625)
+	clf = sklearn_crfsuite.CRF(algorithm='pa')
+	# crf = sklearn_crfsuite.CRF(algorithm='lbfgs', max_iterations=100)
+	# params = {
+	# 	'c1':scipy.stats.expon(scale=.5),
+	# 	'c2':scipy.stats.expon(scale=.05),
+	# }
+	# f1_scorer = make_scorer(metrics.flat_f1_score, average='weighted')
+	# clf = RandomizedSearchCV(crf, params, cv=5, n_jobs=-1, n_iter=50, scoring=f1_scorer)
+	
+	XL, YL, NL = uncrfformat(Xlearn1, Ylearn1, Nlearn1)
+	XT, YT, NT = uncrfformat(Xlearn2, Ylearn2, Nlearn2)
 	YL = np.asarray(YL)
 	YT = np.asarray(YT)
+	YL[YL!='0']='2'
+	YT[YT!='0']='2'
 	treeclf = RandomForestClassifier(n_estimators=40, criterion='entropy', max_features='auto', bootstrap=True, oob_score=True, n_jobs=2, class_weight="balanced", random_state=42)
-	# clf = AdaBoostCLassifier(n_estimators=100)
 	treeclf.fit(XL, YL)
-	Yhat = treeclf.predict(XT)
-	print "======TREE PERFORMANCE======"
-	print_performance(YT, Yhat)
 
-	if CRF_EVAL:
-		# Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest = splitcrf(X, Y, names, pages, .2)
-		# Xdev, Xtest, Ydev, Ytest, Ndev, Ntest, Pdev, Ptest = splitcrf(Xtest, Ytest, Ntest, Ptest, .5)
-		# Xlearn1, Xlearn2, Ylearn1, Ylearn2, Nlearn1, Nlearn2, Plearn1, Plearn2 = splitcrf(Xlearn, Ylearn, Nlearn, Plearn, .625)
-		clf = sklearn_crfsuite.CRF(algorithm='pa')
-		# crf = sklearn_crfsuite.CRF(algorithm='lbfgs', max_iterations=100)
-		# params = {
-		# 	'c1':scipy.stats.expon(scale=.5),
-		# 	'c2':scipy.stats.expon(scale=.05),
-		# }
-		# f1_scorer = make_scorer(metrics.flat_f1_score, average='weighted')
-		# clf = RandomizedSearchCV(crf, params, cv=5, n_jobs=-1, n_iter=50, scoring=f1_scorer)
-		
-		XL, YL, NL = uncrfformat(Xlearn1, Ylearn1, Nlearn1)
-		XT, YT, NT = uncrfformat(Xlearn2, Ylearn2, Nlearn2)
-		YL = np.asarray(YL)
-		YT = np.asarray(YT)
-		YL[YL!='0']='2'
-		YT[YT!='0']='2'
-		treeclf = RandomForestClassifier(n_estimators=40, criterion='entropy', max_features='auto', bootstrap=True, oob_score=True, n_jobs=2, class_weight="balanced", random_state=42)
-		treeclf.fit(XL, YL)
+	learnguesses = [treeclf.predict(chunk) for chunk in Xlearn2]
+	testguesses = [treeclf.predict(chunk) for chunk in Xtest]
+	devguesses = [treeclf.predict(chunk) for chunk in Xdev]
 
-		learnguesses = [treeclf.predict(chunk) for chunk in Xlearn2]
-		testguesses = [treeclf.predict(chunk) for chunk in Xtest]
-		devguesses = [treeclf.predict(chunk) for chunk in Xdev]
+	# p=1 # make 100% of the data noise
+	# learnguesses, testguesses, devguesses = simulate_data(p)
 
-		# p=1 # make 100% of the data noise
-		# learnguesses, testguesses, devguesses = simulate_data(p)
+	CXlearn = get_crf_data(learnguesses, Xlearn2, Nlearn2, Plearn2)
+	CXtest = get_crf_data(testguesses, Xtest, Ntest, Ptest)
+	CXdev = get_crf_data(devguesses, Xdev, Ndev, Pdev)
+	clf.fit(CXlearn, Ylearn2, CXdev, Ydev)
+	CYhat = clf.predict(CXtest)
+	print "======CRF PERFORMANCE======"
+	print_performance(lsum(Ytest), lsum(CYhat))
 
-		CXlearn = get_crf_data(learnguesses, Xlearn2, Nlearn2, Plearn2)
-		CXtest = get_crf_data(testguesses, Xtest, Ntest, Ptest)
-		CXdev = get_crf_data(devguesses, Xdev, Ndev, Pdev)
-		clf.fit(CXlearn, Ylearn2, CXdev, Ydev)
-		CYhat = clf.predict(CXtest)
-		print "======CRF PERFORMANCE======"
-		print_performance(lsum(Ytest), lsum(CYhat))
+	# joblib.dump(clf, "Model/model.pkl")
 
-		# joblib.dump(clf, "Model/model.pkl")
+if visualize:
+	scatter_matrix(df, alpha=0.2, figsize=(8, 8), diagonal='none');
+	plt.figure()
+	andrews_curves(df, 'Class')
+	plt.show()
 
-	if visualize:
-		scatter_matrix(df, alpha=0.2, figsize=(8, 8), diagonal='none');
-		plt.figure()
-		andrews_curves(df, 'Class')
-		plt.show()
-
-	joblib.dump(treeclf, "Model/treemodel.pkl")
+joblib.dump(treeclf, "Model/treemodel.pkl")
