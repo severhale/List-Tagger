@@ -255,7 +255,7 @@ def get_feature_table_pg(parent_map, pages, pg_num, freq_dict, dict_sum):
 	pg_dim = get_page_dimensions(page)
 	name = get_book_name([page])
 	num = get_page_number(page)
-	line_dims = get_line_dims(lines)
+	line_dims = get_line_dims(lines, pg_dim)
 	lmargins = [line[0] for line in line_dims]
 	rmargins = [pg_dim[0] - line[2] for line in line_dims]
 	tags = []
@@ -291,25 +291,21 @@ def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_
 	result = get_feature_vec(parent_map, prev_lines+lines+next_lines, line_num+len(prev_lines), pg_dim, freq_dict, dict_sum)
 	return result
 
-def get_line_dims(lines):
+def get_line_dims(lines, pg_dim):
 	line_dims = []
 	for line in lines:
 		if len(line)>0:
 			line_dims.append((get_full_coords(line[0])[:2] + get_full_coords(line[-1])[2:4]))
+		else:
+			line_dims.append((pg_dim[0]/2, pg_dim[1]/2, pg_dim[0]/2, pg_dim[1]/2))
 	return line_dims
 
 # Get feature vector of just the line specified with no neighbor data as a list of values
 def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
-	line_dims = get_line_dims(lines)
+	line_dims = get_line_dims(lines, pg_dim)
 	lmargins = [line[0] for line in line_dims]
 	rmargins = [pg_dim[0] - line[2] for line in line_dims]
 	return get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum)
-
-def compose_feature_vecs(fvecs, start_index, num_lines):
-	result = []
-	for i in range(start_index, start_index + num_lines):
-		result.append(make_feature_vec(getelement(fvecs, i), getelement(fvecs, i-1), getelement(fvecs, i+1)))
-	return result
 
 def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec = [0] * len(treed)
@@ -334,12 +330,16 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 				t_margin = curr_dim[1]
 			found_next = False
 			if line_num < len(lines) - 1:
-				next_line = lines[line_num + 1]
-				if len(next_line) > 0:
-					next_pos = line_dims[line_num + 1]
-					if next_pos[1] > curr_dim[1]:
-						b_margin = next_pos[1] - curr_dim[1]
-						found_next = True
+				try:
+					next_line = lines[line_num + 1]
+					if len(next_line) > 0:
+						next_pos = line_dims[line_num + 1]
+						if next_pos[1] > curr_dim[1]:
+							b_margin = next_pos[1] - curr_dim[1]
+							found_next = True
+				except:
+					print "Error at line %d with length %d." % (line_num, len(lines))
+					print "len(line_dims)=%d" % len(line_dims)
 			if not found_next:
 				b_margin = pg_dim[1] - curr_dim[1]
 			syllables = syllable_count(line)
@@ -376,7 +376,7 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 			vec[treed['mean_line_length']] = np.mean(llengths)
 			vec[treed['std_line_length']] = np.std(llengths)
 			got_vec = True
-	return vec if got_vec else None
+	return vec
 
 # Get the feature vector of the specified line as a list of values along with four surrounding lines
 def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
