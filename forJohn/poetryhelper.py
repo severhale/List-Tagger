@@ -242,27 +242,29 @@ def get_feature_table(parent_map, pages, freq_dict, dict_sum):
 		if len(ldata) > 0:
 			data += ldata
 			tags += ltags
+	for i in range(len(pages)):
+		data[i] = make_feature_vec(getelement(data, i), getelement(data, i-1), getelement(data, i+1))
 	return np.asarray(tags), np.vstack(data)
 
 # Get a numpy array containing all single feature vectors of all lines on the page specified
+# The resulting features will not include any features depending on surrounding lines 
+# They will, however, have page-level features (mean + std dev. margins)
 def get_feature_table_pg(parent_map, pages, pg_num, freq_dict, dict_sum):
 	page = pages[pg_num]
 	lines = get_all_lines(page)
 	pg_dim = get_page_dimensions(page)
 	name = get_book_name([page])
 	num = get_page_number(page)
-	# if len(lines) == 0:
-	# 	data = np.array([get_feature_vec(parent_map, [], -1, pg_dim, freq_dict, dict_sum)])
-	# 	tags = []
-	# else:
+	line_dims = get_line_dims(lines)
+	lmargins = [line[0] for line in line_dims]
+	rmargins = [pg_dim[0] - line[2] for line in line_dims]
 	tags = []
 	data = []
 	for i in range(len(lines)):
 		tags.append("%s_%s_%d" % (name, num, i))
-		# data.append(get_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
-		data.append(get_feature_vec_pg(parent_map, pages, pg_num, i, freq_dict, dict_sum))
+		# data.append(get_feature_vec_pg(parent_map, pages, pg_num, i, freq_dict, dict_sum))
+		data.append(get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, i, pg_dim, freq_dict, dict_sum))
 	result = data
-	# result = [lsum([getelement(data, j) for j in range(i-2,i+3)]) for i in range(len(data))]
 	return tags, result
 
 # Get the single feature vector of the line specified by page_index and line_num
@@ -289,45 +291,69 @@ def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_
 	result = get_feature_vec(parent_map, prev_lines+lines+next_lines, line_num+len(prev_lines), pg_dim, freq_dict, dict_sum)
 	return result
 
+def get_line_dims(lines):
+	line_dims = []
+	for line in lines:
+		if len(line)>0:
+			line_dims.append((get_full_coords(line[0])[:2] + get_full_coords(line[-1])[2:4]))
+	return line_dims
+
 # Get feature vector of just the line specified with no neighbor data as a list of values
 def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
+	line_dims = get_line_dims(lines)
+	lmargins = [line[0] for line in line_dims]
+	rmargins = [pg_dim[0] - line[2] for line in line_dims]
+	return get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum)
+
+def compose_feature_vecs(fvecs, start_index, num_lines):
+	result = []
+	for i in range(start_index, start_index + num_lines):
+		result.append(make_feature_vec(getelement(fvecs, i), getelement(fvecs, i-1), getelement(fvecs, i+1)))
+	return result
+
+def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec = [0] * len(treed)
 	got_vec = False
 	if line_num < len(lines) and line_num >= 0:
 		line = lines[line_num]
 		if len(line) > 0:
-			first_pos = get_word_pos(line[0])
-			last_pos = get_word_pos(line[-1])
-			l_margin = first_pos[0]
-			r_margin = pg_dim[0] - last_pos[0]
+			curr_dim = line_dims[line_num]
+			l_margin = curr_dim[0]
+			r_margin = pg_dim[0] - curr_dim[2]
 			t_margin = 0
 			b_margin = 0
 			found_prev = False
 			if line_num > 0:
 				prev_line = lines[line_num - 1]
 				if len(prev_line) > 0:
-					prev_pos = get_word_pos(prev_line[0])
-					if prev_pos[1] < first_pos[1]:
-						t_margin = first_pos[1] - prev_pos[1]
+					prev_pos = line_dims[line_num - 1]
+					if prev_pos[1] < curr_dim[1]:
+						t_margin = curr_dim[1] - prev_pos[1]
 						found_prev = True
 			if not found_prev:
-				t_margin = first_pos[1]
+				t_margin = curr_dim[1]
 			found_next = False
 			if line_num < len(lines) - 1:
 				next_line = lines[line_num + 1]
 				if len(next_line) > 0:
-					next_pos = get_word_pos(next_line[0])
-					if next_pos[1] > first_pos[1]:
-						b_margin = next_pos[1] - first_pos[1]
+					next_pos = line_dims[line_num + 1]
+					if next_pos[1] > curr_dim[1]:
+						b_margin = next_pos[1] - curr_dim[1]
 						found_next = True
 			if not found_next:
-				b_margin = pg_dim[1] - first_pos[1]
+				b_margin = pg_dim[1] - curr_dim[1]
 			syllables = syllable_count(line)
 			para = parent_map[line]
 			plength = len(para.findall(".//WORD"))
 			margins = [l_margin/pg_dim[0], r_margin/pg_dim[0], t_margin/pg_dim[1], b_margin/pg_dim[1], syllables, plength]
 			pos = pos_count(line)
 			prob = get_probability(line, freq_dict, dict_sum)
+			first_words = []
+			paralines = para.findall(".//LINE")
+			for line in paralines:
+				if len(line) > 0:
+					first_words.append(line[0].text)
+			llengths = map(lambda x:len(x.findall(".//WORD")), lines)
 			vec[treed['syl_c']] = syllables
 			vec[treed['prob_c']] = prob
 			vec[treed['lmarg_c']] = margins[0]
@@ -341,26 +367,12 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 			vec[treed['adj']] = pos[2]
 			vec[treed['det']] = pos[3]
 			vec[treed['plength']] = plength
-			first_words = []
-			paralines = para.findall(".//LINE")
-			for line in paralines:
-				if len(line) > 0:
-					first_words.append(line[0].text)
 			vec[treed['cap_lines']] = sum(i[0].istitle() for i in first_words)/len(paralines)
 			vec[treed['cap_c']] = 1 if line.find(".//WORD").text.istitle() else 0
-			lmargins = []
-			rmargins = []
-			for l in lines:
-				if len(l) > 0:
-					first_pos = get_word_pos(l[0])
-					last_pos = get_word_pos(l[-1])
-					lmargins.append(first_pos[0])
-					rmargins.append(pg_dim[0] - last_pos[0])
 			vec[treed['mean_lmarg']] = np.mean(lmargins)
 			vec[treed['std_lmarg']] = np.std(lmargins)
 			vec[treed['mean_rmarg']] = np.mean(rmargins)
 			vec[treed['std_rmarg']] = np.std(rmargins)
-			llengths = map(lambda x:len(x.findall(".//WORD")), lines)
 			vec[treed['mean_line_length']] = np.mean(llengths)
 			vec[treed['std_line_length']] = np.std(llengths)
 			got_vec = True
@@ -390,6 +402,10 @@ def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 		pvec = vec
 	if nvec == None:
 		nvec = vec
+	return make_feature_vec(vec, pvec, nvec)
+
+# make a feature vector building off of vec with previous feature vec pvec and next feature vec nvec
+def make_feature_vec(vec, pvec, nvec):
 	vec[treed['syl_p']] = pvec[treed['syl_c']]
 	vec[treed['syl_n']] = nvec[treed['syl_c']]
 	vec[treed['lmarg_p']] = pvec[treed['lmarg_c']]
@@ -402,19 +418,6 @@ def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec[treed['tmarg_n']] = nvec[treed['tmarg_c']]
 	vec[treed['cap_p']] = pvec[treed['cap_c']]
 	vec[treed['cap_n']] = nvec[treed['cap_c']]
-	# nnvec = get_single_feature_vec(parent_map, lines, line_num+2, pg_dim, freq_dict, dict_sum)
-	# if nnvec == None:
-	# 	nnvec = nvec
-	# ppvec = get_single_feature_vec(parent_map, lines, line_num-2, pg_dim, freq_dict, dict_sum)
-	# if ppvec == None:
-	# 	ppvec = pvec
-	# nnnvec = get_single_feature_vec(parent_map, lines, line_num+3, pg_dim, freq_dict, dict_sum)
-	# if nnnvec == None:
-	# 	nnnvec = nvec
-	# pppvec = get_single_feature_vec(parent_map, lines, line_num-3, pg_dim, freq_dict, dict_sum)
-	# if pppvec == None:
-	# 	pppvec = pvec
-	# return pppvec + ppvec + vec + nnvec + nnnvec
 	return vec
 
 def get_crf_data(tree_guesses, X1, names, pages):
@@ -552,7 +555,7 @@ def save_data_target(data, names, target):
 	fmt_string = "%s\t"
 	for i in range(1, data.shape[1] + 1):
 		fmt_string += str(i) + ":%s\t"
-	with open(target, 'wb') as f:
+	with open(target, 'ab') as f:
 		np.savetxt(f, final_table, fmt=fmt_string)
 
 def save_data(data, names):
@@ -771,6 +774,63 @@ def poem_indices(Y, names, pages):
 		prev_page = p
 		prev_line = n
 	return indices
+
+# meant to be used on results of entire books. therefore, it is
+# assumed that it is sorted and all lines are adjacent. tolerance is 
+# the number of non-poem lines that can be seen in a row without
+# breaking off the current poem
+def guess_poem_indices(Y, names, tolerance):
+	parsed_names = map(parse_tag, names)
+	indices = []
+	in_poem = False
+	nonlines = 0
+	for i in range(len(Y)):
+		y = int(Y[i])
+		n = parsed_names[i]
+		if in_poem:
+			try:
+				if y == 0:
+					nonlines += 1
+					if nonlines > tolerance:
+						indices[-1] += (i-tolerance,)
+						nonlines = 0
+						in_poem = False
+				else:
+					nonlines=0
+			except:
+				print "Error at %s" % (list(n))
+		else:
+			if y == 2:
+				in_poem = True
+				indices.append((i,))
+	return indices
+
+# poems is a list of tuples of start and end indices referencing
+# lines in names. method returns a list of strings. each string is
+# a newline separated poem
+def get_poems(poems, names, pages):
+	results = []
+# 	pages = pages_from_names(names)
+	parsed_names = map(parse_tag, names)
+	for poem in poems:
+		start = poem[0]
+		end = poem[1]
+		results.append("")
+		for i in range(start, end+1):
+			linenum = int(parsed_names[i][2])
+			results[-1] += "%s\n" % (get_line_text(get_line(pages[i], linenum)))
+	return results
+
+def print_poems(Y, names, pages, tolerance):
+	results = ""
+	poems = guess_poem_indices(Y, names, tolerance)
+	ptext = get_poems(poems, names, pages)
+	parsed_names = map(parse_tag, names)
+	for i in range(len(poems)):
+		ind = poems[i][0]
+		results += "============BOOK %s, PAGE %s============\n" % (parsed_names[ind][0], parsed_names[ind][1])
+		results += ptext[i] + "\n"
+	return results
 
 # p: Proabability from 0 to 1 that truth data is replaced with noise
 def simulate_data(p):
