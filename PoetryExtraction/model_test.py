@@ -46,4 +46,4 @@ for book_file in os.listdir(os.getcwd() + '/' + fname):
 		book_counter += 1
 		print "Book count is %d after %.2f minutes" % (book_counter, (time.time() - start_time)/60)
 	except:
-		print "Error with book %s" % book
+		print "Error with book %s" % book_file
