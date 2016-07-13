@@ -350,10 +350,10 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 			prob = get_probability(line, freq_dict, dict_sum)
 			first_words = []
 			paralines = para.findall(".//LINE")
-			for line in paralines:
-				if len(line) > 0:
-					first_words.append(line[0].text)
-			llengths = map(lambda x:len(x.findall(".//WORD")), lines)
+			for l in paralines:
+				if len(l) > 0:
+					first_words.append(l[0].text)
+			llengths = map(len, lines)
 			vec[treed['syl_c']] = syllables
 			vec[treed['prob_c']] = prob
 			vec[treed['lmarg_c']] = margins[0]
@@ -368,7 +368,7 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 			vec[treed['det']] = pos[3]
 			vec[treed['plength']] = plength
 			vec[treed['cap_lines']] = sum(i[0].istitle() for i in first_words)/len(paralines)
-			vec[treed['cap_c']] = 1 if line.find(".//WORD").text.istitle() else 0
+			vec[treed['cap_c']] = 1 if line[0].text.istitle() else 0
 			vec[treed['mean_lmarg']] = np.mean(lmargins)
 			vec[treed['std_lmarg']] = np.std(lmargins)
 			vec[treed['mean_rmarg']] = np.mean(rmargins)
