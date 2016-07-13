@@ -27,8 +27,8 @@ with open(sys.argv[1], 'r') as f:
 for book_file in books:
 	# try:
 	pages = list(get_pg_iterator(book_file))
-	tags, data = easy_feature_table(pages, freq_dict)
-	save_data_target(data, tags, out_name)
+	tags, data = easy_feature_table(3, pages, freq_dict)
+	save_data(data, tags, out_name)
 	book_counter += 1
 	print "Book count is %d after %.2f minutes" % (book_counter, (time.time() - start_time)/60)
 	# except Exception as ex:

@@ -49,42 +49,49 @@ crfd = {
 	'punc_end':33, # bool
 }
 
-treed = {
-	'syl_c':0, # int
-	'syl_p':1, # int
-	'syl_n':2, # int
-	'prob_c':3, # float
-	'lmarg_c':4, # float
-	'lmarg_p':5, # float
-	'lmarg_n':6, # float
-	'rmarg_c':7, # float
-	'rmarg_p':8, # float
-	'rmarg_n':9, # float
-	'tmarg_c':10, # float
-	'tmarg_p':11, # float
-	'tmarg_n':12, # float
-	'bmarg_c':13, # float
-	'bmarg_p':14, # float
-	'bmarg_n':15, # float
-	'linenum':16, # int
-	'pnoun':17, # float
-	'nums':18, # float
-	'plength':19,
-	'cap_lines':20,
-	'adj':21,
-	'det':22,
-	'cap_c':23,
-	'cap_p':24,
-	'cap_n':25,
-	'lines_remaining':26,
-	'mean_line_length':27,
-	'std_line_length':28,
-	'mean_lmarg':29,
-	'std_lmarg':30,
-	'mean_rmarg':31,
-	'std_rmarg':32,
-}
+# treed = {
+# 	'syl_c':0, # int
+# 	'syl_p':1, # int
+# 	'syl_n':2, # int
+# 	'prob_c':3, # float
+# 	'lmarg_c':4, # float
+# 	'lmarg_p':5, # float
+# 	'lmarg_n':6, # float
+# 	'rmarg_c':7, # float
+# 	'rmarg_p':8, # float
+# 	'rmarg_n':9, # float
+# 	'tmarg_c':10, # float
+# 	'tmarg_p':11, # float
+# 	'tmarg_n':12, # float
+# 	'bmarg_c':13, # float
+# 	'bmarg_p':14, # float
+# 	'bmarg_n':15, # float
+# 	'linenum':16, # int
+# 	'pnoun':17, # float
+# 	'nums':18, # float
+# 	'plength':19,
+# 	'cap_lines':20,
+# 	'adj':21,
+# 	'det':22,
+# 	'cap_c':23,
+# 	'cap_p':24,
+# 	'cap_n':25,
+# 	'lines_remaining':26,
+# 	'mean_line_length':27,
+# 	'std_line_length':28,
+# 	'mean_lmarg':29,
+# 	'std_lmarg':30,
+# 	'mean_rmarg':31,
+# 	'std_rmarg':32,
+# }
 
+# features that should be taken from surrounding lines
+f_context = ['syl', 'prob', 'lmarg', 'rmarg', 'tmarg', 'bmarg', 'pnoun', 'nums', 'adj', 'det', 'cap']
+# features that do not need to be taken from surrounding lines
+f_line = ['linenum', 'cap_lines', 'lines_remaining', 'plength', 'mean_line_length', 'std_line_length', 'mean_lmarg', 'std_lmarg', 'mean_rmarg', 'std_rmarg']
+
+treed = {f_context[i]:i for i in range(len(f_context))}
+treed.update({f_line[i]:i+len(f_context) for i in range(len(f_line))})
 invcrfd = {v:k for k,v in crfd.items()}
 invtreed = {v:k for k,v in treed.items()}
 
@@ -226,15 +233,23 @@ def pos_count(line):
 def get_parent_map(pages):
 	return {c:p for page in pages for p in page.iter() for c in p}
 
-# Get numpy table with all data for all pages
-def easy_feature_table(pages, freq_dict):
+# Get numpy table with all data for all pages, include n previous and n next feature vecs in each vec
+def easy_feature_table(n, pages, freq_dict):
 	parent_map = get_parent_map(pages)
 	dict_sum = sum(freq_dict.itervalues())
-	tags, data = get_feature_table(parent_map, pages, freq_dict, dict_sum)
+	tags, data = get_feature_table(n, parent_map, pages, freq_dict, dict_sum)
 	return tags, data
 
-# Get a numpy table containing all single feature vectors of all lines on all pages
-def get_feature_table(parent_map, pages, freq_dict, dict_sum):
+# Get a numpy table containing all feature vectors of all lines on all pages
+def get_feature_table(n, parent_map, pages, freq_dict, dict_sum):
+	tags, data = get_single_feature_table(parent_map, pages, freq_dict, dict_sum)
+	if n > 0:
+		data = make_feature_vecs(n, data)
+	return np.asarray(tags), np.vstack(data)
+
+# Get table of single feature vecs of all lines on all pages in order
+# Vectors will not contain f_context features from surrounding lines
+def get_single_feature_table(parent_map, pages, freq_dict, dict_sum):
 	data = []
 	tags = []
 	for i in range(len(pages)):
@@ -242,9 +257,7 @@ def get_feature_table(parent_map, pages, freq_dict, dict_sum):
 		if len(ldata) > 0:
 			data += ldata
 			tags += ltags
-	for i in range(len(pages)):
-		data[i] = make_feature_vec(getelement(data, i), getelement(data, i-1), getelement(data, i+1))
-	return np.asarray(tags), np.vstack(data)
+	return tags, data
 
 # Get a numpy array containing all single feature vectors of all lines on the page specified
 # The resulting features will not include any features depending on surrounding lines 
@@ -262,13 +275,12 @@ def get_feature_table_pg(parent_map, pages, pg_num, freq_dict, dict_sum):
 	data = []
 	for i in range(len(lines)):
 		tags.append("%s_%s_%d" % (name, num, i))
-		# data.append(get_feature_vec_pg(parent_map, pages, pg_num, i, freq_dict, dict_sum))
 		data.append(get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, i, pg_dim, freq_dict, dict_sum))
 	result = data
 	return tags, result
 
 # Get the single feature vector of the line specified by page_index and line_num
-def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_sum):
+def get_feature_vec_pg(n, parent_map, pages, page_index, line_num, freq_dict, dict_sum):
 	result = []
 	page = pages[page_index]
 	lines = get_all_lines(pages[page_index])
@@ -276,19 +288,19 @@ def get_feature_vec_pg(parent_map, pages, page_index, line_num, freq_dict, dict_
 	# result = get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
 	prev_lines=[]
 	next_lines=[]
-	if line_num < 1:
+	if line_num < n:
 		if page_index > 0:
 			try:
 				prev_lines.append(get_all_lines(pages[page_index-1])[-1])
 			except:
 				pass
-	if line_num > len(lines)-2:
+	if line_num > len(lines)-n-1:
 		if page_index < len(pages)-1:
 			try:
 				next_lines.append(get_all_lines(pages[page_index-1])[0])
 			except:
 				pass
-	result = get_feature_vec(parent_map, prev_lines+lines+next_lines, line_num+len(prev_lines), pg_dim, freq_dict, dict_sum)
+	result = get_feature_vec(n, parent_map, prev_lines+lines+next_lines, line_num+len(prev_lines), pg_dim, freq_dict, dict_sum)
 	return result
 
 def get_line_dims(lines, pg_dim):
@@ -299,6 +311,16 @@ def get_line_dims(lines, pg_dim):
 		else:
 			line_dims.append((pg_dim[0]/2, pg_dim[1]/2, pg_dim[0]/2, pg_dim[1]/2))
 	return line_dims
+
+def get_feature_names(n):
+	fnames = treed.keys()
+	for i in range(1, n+1):
+		for name in f_context:
+			fnames.append("%s%dp" % (name, i))
+	for i in range(1, n+1):
+		for name in f_context:
+			fnames.append("%s%dn" % (name, i))
+	return {fnames[i]:i for i in range(len(fnames))}
 
 # Get feature vector of just the line specified with no neighbor data as a list of values
 def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
@@ -354,12 +376,12 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 				if len(l) > 0:
 					first_words.append(l[0].text)
 			llengths = map(len, lines)
-			vec[treed['syl_c']] = syllables
-			vec[treed['prob_c']] = prob
-			vec[treed['lmarg_c']] = margins[0]
-			vec[treed['rmarg_c']] = margins[1]
-			vec[treed['tmarg_c']] = margins[2]
-			vec[treed['bmarg_c']] = margins[3]
+			vec[treed['syl']] = syllables
+			vec[treed['prob']] = prob
+			vec[treed['lmarg']] = margins[0]
+			vec[treed['rmarg']] = margins[1]
+			vec[treed['tmarg']] = margins[2]
+			vec[treed['bmarg']] = margins[3]
 			vec[treed['linenum']] = line_num
 			vec[treed['lines_remaining']] = len(lines)-line_num
 			vec[treed['pnoun']] = pos[0]
@@ -368,7 +390,7 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 			vec[treed['det']] = pos[3]
 			vec[treed['plength']] = plength
 			vec[treed['cap_lines']] = sum(i[0].istitle() for i in first_words)/len(paralines)
-			vec[treed['cap_c']] = 1 if line[0].text.istitle() else 0
+			vec[treed['cap']] = 1 if line[0].text.istitle() else 0
 			vec[treed['mean_lmarg']] = np.mean(lmargins)
 			vec[treed['std_lmarg']] = np.std(lmargins)
 			vec[treed['mean_rmarg']] = np.mean(rmargins)
@@ -378,136 +400,145 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 			got_vec = True
 	return vec
 
-# Get the feature vector of the specified line as a list of values along with four surrounding lines
-def get_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
+# Get the feature vector of the specified line as a list of values along with n prev and n next lines
+def get_feature_vec(n, parent_map, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec = get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
 	if vec == None:
 		vec = [0]*len(treed)
-	pvec = vec
-	nvec = vec
-	prev_word = ''
-	next_word = ''
-	curr_word = ''
-	if line_num > 0:
-		if len(lines[line_num-1])>0:
-			prev_word = lines[line_num-1][0].text
-		pvec = get_single_feature_vec(parent_map, lines, line_num-1, pg_dim, freq_dict, dict_sum)
-	if line_num < len(lines)-1:
-		if len(lines[line_num+1])>0:
-			next_word = lines[line_num+1][0].text
-		nvec = get_single_feature_vec(parent_map, lines, line_num+1, pg_dim, freq_dict, dict_sum)
-	if len(lines[line_num])>0:
-			prev_word = lines[line_num][0].text
-	if pvec == None:
-		pvec = vec
-	if nvec == None:
-		nvec = vec
-	return make_feature_vec(vec, pvec, nvec)
+	pvecs = []
+	nvecs = []
+	for i in range(line_num-n, line_num):
+		pvecs.append(get_single_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
+	for i in range(line_num+1, line_num+n+1):
+		pvecs.append(get_single_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
+	# prev_word = ''
+	# next_word = ''
+	# curr_word = ''
+	# if line_num > 0:
+	# 	if len(lines[line_num-1])>0:
+	# 		prev_word = lines[line_num-1][0].text
+	# 	pvec = get_single_feature_vec(parent_map, lines, line_num-1, pg_dim, freq_dict, dict_sum)
+	# if line_num < len(lines)-1:
+	# 	if len(lines[line_num+1])>0:
+	# 		next_word = lines[line_num+1][0].text
+	# 	nvec = get_single_feature_vec(parent_map, lines, line_num+1, pg_dim, freq_dict, dict_sum)
+	# if len(lines[line_num])>0:
+	# 		prev_word = lines[line_num][0].text
+	# if pvec == None:
+	# 	pvec = vec
+	# if nvec == None:
+	# 	nvec = vec
+	return make_feature_vec(vec, pvecs, nvecs)
 
-# make a feature vector building off of vec with previous feature vec pvec and next feature vec nvec
-def make_feature_vec(vec, pvec, nvec):
-	vec[treed['syl_p']] = pvec[treed['syl_c']]
-	vec[treed['syl_n']] = nvec[treed['syl_c']]
-	vec[treed['lmarg_p']] = pvec[treed['lmarg_c']]
-	vec[treed['lmarg_n']] = nvec[treed['lmarg_c']]
-	vec[treed['rmarg_p']] = pvec[treed['rmarg_c']]
-	vec[treed['rmarg_n']] = nvec[treed['rmarg_c']]
-	vec[treed['bmarg_p']] = pvec[treed['bmarg_c']]
-	vec[treed['bmarg_n']] = nvec[treed['bmarg_c']]
-	vec[treed['tmarg_p']] = pvec[treed['tmarg_c']]
-	vec[treed['tmarg_n']] = nvec[treed['tmarg_c']]
-	vec[treed['cap_p']] = pvec[treed['cap_c']]
-	vec[treed['cap_n']] = nvec[treed['cap_c']]
-	return vec
+def make_feature_vecs(n, vecs, targets=None):
+	print targets
+	results = []
+	if targets is None:
+		targets = range(len(vecs))
+	for i in targets:
+		vec = vecs[i]
+		pvecs = [getelement(vecs, j) for j in range(i-n, i)]
+		nvecs = [getelement(vecs, j) for j in range(i+1, i+n+1)]
+		results.append(make_feature_vec(vec, pvecs, nvecs))
+	return results
 
-def get_crf_data(tree_guesses, X1, names, pages):
-	X = []
-	for i in range(len(X1)):
-		X.append(X1[i][:]) # deep copy so as not to change X1
-	# need to go through and get each line referenced
-	for i in range(len(X)):
-		tree_guess = tree_guesses[i]
-		for j in range(len(X[i])):
-			line = X[i][j]
-			linedata = parse_tag(names[i][j])
-			linenum = int(linedata[2])
-			vec = [0] * len(crfd)
-			vec[crfd['syl_c']] = "%d" % line[treed['syl_c']]
-			vec[crfd['syl_pc']] = "%s" % (abs(line[treed['syl_p']]-line[treed['syl_c']]) <= 1)
-			vec[crfd['syl_cn']] = "%s" % (abs(line[treed['syl_c']]-line[treed['syl_n']]) <= 1)
-			vec[crfd['syl_pn']] = "%s" % (abs(line[treed['syl_p']]-line[treed['syl_n']]) <= 1)
-			# vec[crfd['syl_pc']] = "%d-%d" % (line[treed['syl_p']], line[treed['syl_c']])
-			# vec[crfd['syl_cn']] = "%d-%d" % (line[treed['syl_c']], line[treed['syl_n']])
-			vec[crfd['prob_c']] = "%d" % (line[treed['prob_c']]/10)
-			vec[crfd['lmarg_c']] = "%.1f" % line[treed['lmarg_c']]
-			# vec[crfd['lmarg_pc']] = "%.1f-%.1f" % (line[treed['lmarg_p']], line[treed['lmarg_c']])
-			# vec[crfd['lmarg_cn']] = "%.1f-%.1f" % (line[treed['lmarg_c']], line[treed['lmarg_n']])
-			vec[crfd['lmarg_pc']] = "%s" % (abs(line[treed['lmarg_p']]-line[treed['lmarg_c']])<=.05)
-			vec[crfd['lmarg_cn']] = "%s" % (abs(line[treed['lmarg_c']]-line[treed['lmarg_n']])<=.05)
-			vec[crfd['lmarg_pn']] = "%s" % (abs(line[treed['lmarg_p']]-line[treed['lmarg_n']])<=.05)
+# make a feature vector building off of vec with previous and next feature vectors
+def make_feature_vec(vec, pvecs, nvecs):
+	v = vec[:]
+	for pvec in pvecs:
+		v += [pvec[treed[fname]] for fname in f_context]
+	for nvec in nvecs:
+		v += [nvec[treed[fname]] for fname in f_context]
+	return v
+
+# def get_crf_data(tree_guesses, X1, names, pages):
+# 	X = []
+# 	for i in range(len(X1)):
+# 		X.append(X1[i][:]) # deep copy so as not to change X1
+# 	# need to go through and get each line referenced
+# 	for i in range(len(X)):
+# 		tree_guess = tree_guesses[i]
+# 		for j in range(len(X[i])):
+# 			line = X[i][j]
+# 			linedata = parse_tag(names[i][j])
+# 			linenum = int(linedata[2])
+# 			vec = [0] * len(crfd)
+# 			vec[crfd['syl_c']] = "%d" % line[treed['syl_c']]
+# 			vec[crfd['syl_pc']] = "%s" % (abs(line[treed['syl_p']]-line[treed['syl_c']]) <= 1)
+# 			vec[crfd['syl_cn']] = "%s" % (abs(line[treed['syl_c']]-line[treed['syl_n']]) <= 1)
+# 			vec[crfd['syl_pn']] = "%s" % (abs(line[treed['syl_p']]-line[treed['syl_n']]) <= 1)
+# 			# vec[crfd['syl_pc']] = "%d-%d" % (line[treed['syl_p']], line[treed['syl_c']])
+# 			# vec[crfd['syl_cn']] = "%d-%d" % (line[treed['syl_c']], line[treed['syl_n']])
+# 			vec[crfd['prob_c']] = "%d" % (line[treed['prob_c']]/10)
+# 			vec[crfd['lmarg_c']] = "%.1f" % line[treed['lmarg_c']]
+# 			# vec[crfd['lmarg_pc']] = "%.1f-%.1f" % (line[treed['lmarg_p']], line[treed['lmarg_c']])
+# 			# vec[crfd['lmarg_cn']] = "%.1f-%.1f" % (line[treed['lmarg_c']], line[treed['lmarg_n']])
+# 			vec[crfd['lmarg_pc']] = "%s" % (abs(line[treed['lmarg_p']]-line[treed['lmarg_c']])<=.05)
+# 			vec[crfd['lmarg_cn']] = "%s" % (abs(line[treed['lmarg_c']]-line[treed['lmarg_n']])<=.05)
+# 			vec[crfd['lmarg_pn']] = "%s" % (abs(line[treed['lmarg_p']]-line[treed['lmarg_n']])<=.05)
 			
-			vec[crfd['rmarg_c']] = "%.1f" % line[treed['rmarg_c']]
-			vec[crfd['rmarg_pc']] = "%s" % (abs(line[treed['rmarg_p']]-line[treed['rmarg_c']])<=.05)
-			vec[crfd['rmarg_cn']] = "%s" % (abs(line[treed['rmarg_c']]-line[treed['rmarg_n']])<=.05)
-			vec[crfd['rmarg_pn']] = "%s" % (abs(line[treed['rmarg_p']]-line[treed['rmarg_n']])<=.05)
-			# vec[crfd['rmarg_pc']] = "%.1f-%.1f" % (line[treed['rmarg_p']], line[treed['rmarg_c']])
-			# vec[crfd['rmarg_cn']] = "%.1f-%.1f" % (line[treed['rmarg_c']], line[treed['rmarg_n']])
-			vec[crfd['line1']] = "1" if linenum==0 else "0"
-			vec[crfd['line2']] = "1" if linenum==1 else "0"
-			linetext = get_line(pages[i][j], linenum)
-			curr_word = linetext[0].text if len(linetext)>0 else ''
-			if curr_word.isdigit() and len(linetext)>1:
-				curr_word = linetext[1].text
-			curr_cap = curr_word.istitle()
-			vec[crfd['capital_c']] = "%s" % curr_cap
-			vec[crfd['rf_c']] = "%s" % tree_guess[j]
-			if j==0:
-				rf_p = "null"
-			else:
-				rf_p = tree_guess[j-1]
-			if j==len(X[i])-1:
-				rf_n = "null"
-			else:
-				rf_n = tree_guess[j+1]
-			vec[crfd['rf_pc']] = "%s-%s" % (rf_p, tree_guess[j])
-			vec[crfd['rf_cn']] = "%s-%s" % (tree_guess[j], rf_n)
-			vec[crfd['tmarg_c']] = "%.1f" % (line[treed['tmarg_c']]*3)
-			vec[crfd['tmarg_p']] = "%.1f" % (line[treed['tmarg_p']]*3)
-			vec[crfd['bmarg_c']] = "%.1f" % (line[treed['bmarg_c']]*3)
-			vec[crfd['bmarg_n']] = "%.1f" % (line[treed['bmarg_n']]*3)
-			vec[crfd['tbmarg_c']] = "%s" % (abs(line[treed['tmarg_c']] - line[treed['bmarg_c']])<=.02)
-			vec[crfd['tmarg-line_c']] = "%s-%s" % (vec[crfd['tmarg_c']], (linenum==0 or linenum==1))
-			prev_cap = False
-			prev_word = ''
-			if j>0:
-				prev_line = get_line(pages[i][j-1], int(parse_tag(names[i][j-1])[2]))
-				prev_word = prev_line[0].text if len(prev_line)>0 else ''
-				if prev_word.isdigit() and len(prev_line)>1:
-					prev_word = prev_line[1].text
-				prev_cap = prev_word.istitle()
-			next_cap = False
-			next_word = ''
-			if j<len(X[i])-1:
-				next_line = get_line(pages[i][j+1], int(parse_tag(names[i][j+1])[2]))
-				next_word = next_line[0].text if len(next_line)>0 else ''
-				if next_word.isdigit() and len(next_line)>1:
-					next_word = next_line[1].text
-				next_cap = next_word.istitle()
-			vec[crfd['capital_cn']] = "%s-%s" % (vec[crfd['capital_c']], next_cap)
-			vec[crfd['capital_pc']] = "%s-%s" % (prev_cap, vec[crfd['capital_c']])
-			vec[crfd['capital_pn']] = "%s-%s" % (prev_cap, next_cap)
-			vec[crfd['repetition_pc']] = "%s" % (prev_word.lower()==curr_word.lower())
-			vec[crfd['repetition_cn']] = "%s" % (curr_word.lower()==next_word.lower())
-			vec[crfd['repetition_pn']] = "%s" % (prev_word.lower()==next_word.lower())
-			vec[crfd['lines_remaining']] = "%d" % (len(get_all_lines(pages[i][j])) - linenum)
-			vec[crfd['punc_end']] = "%s" % (linetext[-1].text[-1] in string.punctuation if len(linetext)>0 and len(linetext[-1].text)>0 else False)
-			lmarg_sign = 0
-			if vec[crfd['lmarg_cn']]=="False":
-				lmarg_sign = 1 if line[treed['lmarg_n']] > line[treed['lmarg_c']] else -1
-			vec[crfd['capital_cn-lmarg_cn']] = "%s-%s-%d" % (curr_cap, next_cap, lmarg_sign)
+# 			vec[crfd['rmarg_c']] = "%.1f" % line[treed['rmarg_c']]
+# 			vec[crfd['rmarg_pc']] = "%s" % (abs(line[treed['rmarg_p']]-line[treed['rmarg_c']])<=.05)
+# 			vec[crfd['rmarg_cn']] = "%s" % (abs(line[treed['rmarg_c']]-line[treed['rmarg_n']])<=.05)
+# 			vec[crfd['rmarg_pn']] = "%s" % (abs(line[treed['rmarg_p']]-line[treed['rmarg_n']])<=.05)
+# 			# vec[crfd['rmarg_pc']] = "%.1f-%.1f" % (line[treed['rmarg_p']], line[treed['rmarg_c']])
+# 			# vec[crfd['rmarg_cn']] = "%.1f-%.1f" % (line[treed['rmarg_c']], line[treed['rmarg_n']])
+# 			vec[crfd['line1']] = "1" if linenum==0 else "0"
+# 			vec[crfd['line2']] = "1" if linenum==1 else "0"
+# 			linetext = get_line(pages[i][j], linenum)
+# 			curr_word = linetext[0].text if len(linetext)>0 else ''
+# 			if curr_word.isdigit() and len(linetext)>1:
+# 				curr_word = linetext[1].text
+# 			curr_cap = curr_word.istitle()
+# 			vec[crfd['capital_c']] = "%s" % curr_cap
+# 			vec[crfd['rf_c']] = "%s" % tree_guess[j]
+# 			if j==0:
+# 				rf_p = "null"
+# 			else:
+# 				rf_p = tree_guess[j-1]
+# 			if j==len(X[i])-1:
+# 				rf_n = "null"
+# 			else:
+# 				rf_n = tree_guess[j+1]
+# 			vec[crfd['rf_pc']] = "%s-%s" % (rf_p, tree_guess[j])
+# 			vec[crfd['rf_cn']] = "%s-%s" % (tree_guess[j], rf_n)
+# 			vec[crfd['tmarg_c']] = "%.1f" % (line[treed['tmarg_c']]*3)
+# 			vec[crfd['tmarg_p']] = "%.1f" % (line[treed['tmarg_p']]*3)
+# 			vec[crfd['bmarg_c']] = "%.1f" % (line[treed['bmarg_c']]*3)
+# 			vec[crfd['bmarg_n']] = "%.1f" % (line[treed['bmarg_n']]*3)
+# 			vec[crfd['tbmarg_c']] = "%s" % (abs(line[treed['tmarg_c']] - line[treed['bmarg_c']])<=.02)
+# 			vec[crfd['tmarg-line_c']] = "%s-%s" % (vec[crfd['tmarg_c']], (linenum==0 or linenum==1))
+# 			prev_cap = False
+# 			prev_word = ''
+# 			if j>0:
+# 				prev_line = get_line(pages[i][j-1], int(parse_tag(names[i][j-1])[2]))
+# 				prev_word = prev_line[0].text if len(prev_line)>0 else ''
+# 				if prev_word.isdigit() and len(prev_line)>1:
+# 					prev_word = prev_line[1].text
+# 				prev_cap = prev_word.istitle()
+# 			next_cap = False
+# 			next_word = ''
+# 			if j<len(X[i])-1:
+# 				next_line = get_line(pages[i][j+1], int(parse_tag(names[i][j+1])[2]))
+# 				next_word = next_line[0].text if len(next_line)>0 else ''
+# 				if next_word.isdigit() and len(next_line)>1:
+# 					next_word = next_line[1].text
+# 				next_cap = next_word.istitle()
+# 			vec[crfd['capital_cn']] = "%s-%s" % (vec[crfd['capital_c']], next_cap)
+# 			vec[crfd['capital_pc']] = "%s-%s" % (prev_cap, vec[crfd['capital_c']])
+# 			vec[crfd['capital_pn']] = "%s-%s" % (prev_cap, next_cap)
+# 			vec[crfd['repetition_pc']] = "%s" % (prev_word.lower()==curr_word.lower())
+# 			vec[crfd['repetition_cn']] = "%s" % (curr_word.lower()==next_word.lower())
+# 			vec[crfd['repetition_pn']] = "%s" % (prev_word.lower()==next_word.lower())
+# 			vec[crfd['lines_remaining']] = "%d" % (len(get_all_lines(pages[i][j])) - linenum)
+# 			vec[crfd['punc_end']] = "%s" % (linetext[-1].text[-1] in string.punctuation if len(linetext)>0 and len(linetext[-1].text)>0 else False)
+# 			lmarg_sign = 0
+# 			if vec[crfd['lmarg_cn']]=="False":
+# 				lmarg_sign = 1 if line[treed['lmarg_n']] > line[treed['lmarg_c']] else -1
+# 			vec[crfd['capital_cn-lmarg_cn']] = "%s-%s-%d" % (curr_cap, next_cap, lmarg_sign)
 			
-			X[i][j] = make_dict(vec)
-	return X
+# 			X[i][j] = make_dict(vec)
+# 	return X
 
 # Find the log-product probability that a line fits the language model contained in freq_dict. dict_sum is the sum of all frequencies of words in the model
 def get_probability(line, freq_dict, dict_sum):
@@ -532,34 +563,17 @@ def getelement(arr, index):
 	else:
 		return arr[index]
 
-
-### NOTE: ONLY WORKS ON CONTIGUOUS DATA!!!!!!!!!!
-# Also probably useless with a crf
-def concat_neighbors(data, num_neighbors):
-	print data.shape
-	data = data.tolist()
-	#### add surrounding line data to each element
-	datacopy = copy.deepcopy(data)
-	for i in range(0, len(datacopy)):
-		for j in range(i-2,i+3):
-			data[i] += getelement(datacopy, j) + getelement(datacopy, j)
-	data = np.asarray(data)
-	print data.shape
-	return data
-
 # Save data to the training_data file
-def save_data_target(data, names, target):
+def save_data(data, names, target='training_data'):
 	names = np.vstack(names)
 	print data.shape
+	print names.shape
 	final_table = np.hstack((names, data))
 	fmt_string = "%s\t"
 	for i in range(1, data.shape[1] + 1):
 		fmt_string += str(i) + ":%s\t"
 	with open(target, 'ab') as f:
 		np.savetxt(f, final_table, fmt=fmt_string)
-
-def save_data(data, names):
-	save_data_target(data, names, 'training_data')
 
 # Trim whitespace and punctuation
 def clean_word(word):

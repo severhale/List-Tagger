@@ -21,6 +21,7 @@ if os.path.dirname(out_name)!='' and not os.path.exists(os.path.dirname(out_name
 
 X = []
 tags = []
+mils = 0
 with open(sys.argv[1], 'r') as f:
 	for line in f:
 		tok = line.split('\t')
@@ -30,11 +31,13 @@ with open(sys.argv[1], 'r') as f:
 			data.append(float(tok[i].split(':')[1]))
 		X.append(data)
 		tags.append(tag)
-		if len(X) >= 1000:
-			Y = clf.predict(X)
+		if len(X) >= 500000:
+			mils += .5
+			print "%.1f million lines" % mils
+			Y = clf.predict_proba(X)[:,1]
 			with open(out_name, 'a') as out:
 				for i in range(len(Y)):
-					out.write("%s %d\n" % (tags[i], Y[i]))
+					out.write("%s %.4f\n" % (tags[i], Y[i]))
 			X = []
 			tags = []
 	Y = clf.predict(X)
