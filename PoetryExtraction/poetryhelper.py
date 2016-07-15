@@ -11,6 +11,7 @@ import sklearn.metrics
 import itertools
 from scipy.stats import scoreatpercentile
 from scipy.stats import nanmedian
+from sklearn.feature_selection import RFE
 
 classes = ['0', '1', '2', '3']
 
@@ -317,7 +318,7 @@ def get_line_dims(lines, pg_dim):
 
 def get_feature_names(n):
 	fnames = treed.keys()
-	for i in range(1, n):
+	for i in range(n):
 		for name in f_context:
 			fnames.append("%s%dp" % (name, n-i))
 	for i in range(1, n+1):
@@ -644,55 +645,55 @@ def pages_from_names(names):
 # where each row contains a page object and column contains the child objects/parameters
 # of the page object
 # .ugh.
-def crfformat(X, Y, names, pages):
-	lines = np.asarray(map(parse_tag, names))
-	lines[:,2] = [i.zfill(4) for i in lines[:,2]]
-	nameinds = np.lexsort(lines.T[::-1])
-	lines = lines[nameinds]
-	names = np.asarray(names)[nameinds]
-	X = X[nameinds]
-	Y = Y[nameinds]
-	pages = [pages[i] for i in nameinds]
+# def crfformat(X, Y, names, pages):
+# 	lines = np.asarray(map(parse_tag, names))
+# 	lines[:,2] = [i.zfill(4) for i in lines[:,2]]
+# 	nameinds = np.lexsort(lines.T[::-1])
+# 	lines = lines[nameinds]
+# 	names = np.asarray(names)[nameinds]
+# 	X = X[nameinds]
+# 	Y = Y[nameinds]
+# 	pages = [pages[i] for i in nameinds]
 
-	### X and Y are now sorted in lexical order according to names
-	index = 0
-	X1 = []
-	Y1 = []
-	names1 = []
-	pages1 = []
-	for book in np.unique(lines[:,0]):
-		contig_X = []
-		contig_Y = []
-		contig_names = []
-		contig_pages = []
+# 	### X and Y are now sorted in lexical order according to names
+# 	index = 0
+# 	X1 = []
+# 	Y1 = []
+# 	names1 = []
+# 	pages1 = []
+# 	for book in np.unique(lines[:,0]):
+# 		contig_X = []
+# 		contig_Y = []
+# 		contig_names = []
+# 		contig_pages = []
 
-		prev_line = int(lines[index,2])
-		contig_X.append(X[index])
-		contig_Y.append(str(Y[index]))
-		contig_names.append(names[index])
-		contig_pages.append(pages[index])
-		index += 1
-		while index < len(lines) and lines[index,0]==book:
-			if len(contig_X) > 0 and not check_adjacent(int(lines[index-1,1]), int(lines[index-1,2]), int(lines[index, 1]), int(lines[index, 2]), pages[index-1]):
-				X1.append(contig_X)
-				Y1.append(contig_Y)
-				names1.append(contig_names)
-				pages1.append(contig_pages)
-				contig_X = []
-				contig_Y = []
-				contig_names = []
-				contig_pages = []
-			contig_X.append(X[index])
-			contig_Y.append(str(Y[index]))
-			contig_names.append(names[index])
-			contig_pages.append(pages[index])
-			index += 1
-		if len(contig_X) > 0:
-			X1.append(contig_X)
-			Y1.append(contig_Y)
-			names1.append(contig_names)
-			pages1.append(contig_pages)
-	return X1, Y1, names1, pages1
+# 		prev_line = int(lines[index,2])
+# 		contig_X.append(X[index])
+# 		contig_Y.append(str(Y[index]))
+# 		contig_names.append(names[index])
+# 		contig_pages.append(pages[index])
+# 		index += 1
+# 		while index < len(lines) and lines[index,0]==book:
+# 			if len(contig_X) > 0 and not check_adjacent(int(lines[index-1,1]), int(lines[index-1,2]), int(lines[index, 1]), int(lines[index, 2]), pages[index-1]):
+# 				X1.append(contig_X)
+# 				Y1.append(contig_Y)
+# 				names1.append(contig_names)
+# 				pages1.append(contig_pages)
+# 				contig_X = []
+# 				contig_Y = []
+# 				contig_names = []
+# 				contig_pages = []
+# 			contig_X.append(X[index])
+# 			contig_Y.append(str(Y[index]))
+# 			contig_names.append(names[index])
+# 			contig_pages.append(pages[index])
+# 			index += 1
+# 		if len(contig_X) > 0:
+# 			X1.append(contig_X)
+# 			Y1.append(contig_Y)
+# 			names1.append(contig_names)
+# 			pages1.append(contig_pages)
+# 	return X1, Y1, names1, pages1
 
 # Takes a dict and returns its values in the order specified in crfd
 def flatten(d):
@@ -892,9 +893,8 @@ def split_books(X, Y, names, test_percent=.2):
 		line_count += sum(mask)
 	return Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest
 
-def subtest(XL, YL, XT, YT, feature_names):
+def subtest(model, XL, YL, XT, YT, feature_names):
 	nfeatures = XL.shape[1]
-	model = treeclf
 	rfe = RFE(model, nfeatures-1)
 	print "BEFORE"
 	model.fit(XL, YL)
@@ -916,7 +916,7 @@ def cvtest(n, model, X, Y, names):
 		XL, XT, YL, YT, NL, NT = split_books(X, Y, names)
 		model.fit(XL, YL)
 		results.append(sklearn.metrics.f1_score(YT, model.predict(XT), average=None)[1])
-	return np.mean(results), np.std(results)
+	return results
 
 # perform leave one out on each book and return a list of models
 # and a list of their respective f1 scores

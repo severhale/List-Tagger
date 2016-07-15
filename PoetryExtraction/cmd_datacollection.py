@@ -1,5 +1,6 @@
 import poetryhelper
 import curses
+import sys
 import webbrowser
 
 statedict = {
@@ -80,10 +81,17 @@ def doStuff(stdscr, pages, pg_nums, name):
 		i += 1
 	write_data(data)
 
-fname = raw_input("Enter file name: ")
-pg_start = int(raw_input("Enter start page: "))
-pg_end = int(raw_input("Enter end page: "))
-pages = poetryhelper.get_pages("../All Text/" + fname, pg_start, pg_end)
+# fname = raw_input("Enter file name: ")
+# pg_start = int(raw_input("Enter start page: "))
+# pg_end = int(raw_input("Enter end page: "))
+fname = sys.argv[1]
+pg_start = 1
+pg_end = sys.maxint
+if len(sys.argv) > 2:
+	pg_start = int(sys.argv[2])
+if len(sys.argv) > 3:
+	pg_end = int(sys.argv[3])
+pages = poetryhelper.get_pages(fname, pg_start, pg_end)
 pg_nums = poetryhelper.get_page_numbers(pages)
 name = poetryhelper.get_book_name(pages)
 
@@ -98,4 +106,5 @@ print "a:\tauthor"
 print "<space>:\tnon-poem"
 print "<backspace>:\treclassify last line"
 print "<other key>:\tskip current line"
+raw_input("Press enter when you're ready to begin.")
 curses.wrapper(doStuff, pages, pg_nums, name)
