@@ -9,6 +9,8 @@ import random
 import operator
 import sklearn.metrics
 import itertools
+from scipy.stats import scoreatpercentile
+from scipy.stats import nanmedian
 
 classes = ['0', '1', '2', '3']
 
@@ -86,7 +88,7 @@ crfd = {
 # }
 
 # features that should be taken from surrounding lines
-f_context = ['syl', 'prob', 'lmarg', 'rmarg', 'tmarg', 'bmarg', 'pnoun', 'nums', 'adj', 'det', 'cap']
+f_context = ['prob', 'syl', 'lmarg', 'rmarg', 'tmarg', 'bmarg', 'pnoun', 'nums', 'adj', 'det', 'cap']
 # features that do not need to be taken from surrounding lines
 f_line = ['linenum', 'cap_lines', 'lines_remaining', 'plength', 'mean_line_length', 'std_line_length', 'mean_lmarg', 'std_lmarg', 'mean_rmarg', 'std_rmarg']
 
@@ -271,6 +273,7 @@ def get_feature_table_pg(parent_map, pages, pg_num, freq_dict, dict_sum):
 	line_dims = get_line_dims(lines, pg_dim)
 	lmargins = [line[0] for line in line_dims]
 	rmargins = [pg_dim[0] - line[2] for line in line_dims]
+	prob = sum(get_probability(line, freq_dict, dict_sum) for line in lines)
 	tags = []
 	data = []
 	for i in range(len(lines)):
@@ -314,9 +317,9 @@ def get_line_dims(lines, pg_dim):
 
 def get_feature_names(n):
 	fnames = treed.keys()
-	for i in range(1, n+1):
+	for i in range(1, n):
 		for name in f_context:
-			fnames.append("%s%dp" % (name, i))
+			fnames.append("%s%dp" % (name, n-i))
 	for i in range(1, n+1):
 		for name in f_context:
 			fnames.append("%s%dn" % (name, i))
@@ -327,6 +330,7 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 	line_dims = get_line_dims(lines, pg_dim)
 	lmargins = [line[0] for line in line_dims]
 	rmargins = [pg_dim[0] - line[2] for line in line_dims]
+	# prob = sum(get_probability(line, freq_dict, dict_sum) for line in lines)
 	return get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum)
 
 def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum):
@@ -369,13 +373,13 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 			plength = len(para.findall(".//WORD"))
 			margins = [l_margin/pg_dim[0], r_margin/pg_dim[0], t_margin/pg_dim[1], b_margin/pg_dim[1], syllables, plength]
 			pos = pos_count(line)
-			prob = get_probability(line, freq_dict, dict_sum)
 			first_words = []
 			paralines = para.findall(".//LINE")
 			for l in paralines:
 				if len(l) > 0:
 					first_words.append(l[0].text)
-			llengths = map(len, lines)
+			llengths = map(float, map(len, lines)) # will this fix it?
+			prob = get_probability(line, freq_dict, dict_sum)
 			vec[treed['syl']] = syllables
 			vec[treed['prob']] = prob
 			vec[treed['lmarg']] = margins[0]
@@ -564,7 +568,7 @@ def getelement(arr, index):
 		return arr[index]
 
 # Save data to the training_data file
-def save_data(data, names, target='training_data'):
+def save_data(data, names, target='training_data', mode='a'):
 	names = np.vstack(names)
 	print data.shape
 	print names.shape
@@ -572,7 +576,7 @@ def save_data(data, names, target='training_data'):
 	fmt_string = "%s\t"
 	for i in range(1, data.shape[1] + 1):
 		fmt_string += str(i) + ":%s\t"
-	with open(target, 'ab') as f:
+	with open(target, mode+'b') as f:
 		np.savetxt(f, final_table, fmt=fmt_string)
 
 # Trim whitespace and punctuation
@@ -937,3 +941,14 @@ def loo_validation_model(model, X, Y, names):
 		clf.estimators_ += classifiers[i].estimators_
 		clf.n_estimators = len(clf.estimators_)
 	return clf
+
+def fivenum(v):
+    v = np.array(v)
+    try:
+        np.sum(v)
+    except TypeError:
+        print('Error: you must provide a list or array of only numbers')
+    q1 = scoreatpercentile(v[~np.isnan(v)],25)
+    q3 = scoreatpercentile(v[~np.isnan(v)],75)
+    md = nanmedian(v)
+    return np.nanmin(v), q1, md, q3, np.nanmax(v),

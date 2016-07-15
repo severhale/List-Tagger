@@ -50,6 +50,6 @@ for book in books:
 	# 	str_pgnum = str(pg_num).zfill(4)
 	# 	tags.append(book + '_' + str_pgnum + '_' + str(lineinfo[1]))
 
-	save_data_target(data, tags, 'single_feature_data')
+	save_data(data, tags, 'single_feature_data', 'a')
 	count += 1
 	print "Book %d done after %.2f minutes" % (count, (time.time() - start)/60)
