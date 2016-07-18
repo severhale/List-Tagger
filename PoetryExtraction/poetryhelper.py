@@ -95,7 +95,7 @@ f_line = ['linenum', 'cap_lines', 'lines_remaining', 'plength', 'mean_line_lengt
 
 treed = {f_context[i]:i for i in range(len(f_context))}
 treed.update({f_line[i]:i+len(f_context) for i in range(len(f_line))})
-invcrfd = {v:k for k,v in crfd.items()}
+# invcrfd = {v:k for k,v in crfd.items()}
 invtreed = {v:k for k,v in treed.items()}
 
 words = nltk.corpus.cmudict.dict()
@@ -379,7 +379,7 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 			nums = 0
 			for word in line:
 				for c in word.text:
-					if c.isnumeric():
+					if c.isdigit():
 						nums += 1
 					nchars += 1
 			nums /= nchars
@@ -398,7 +398,7 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 			vec[treed['bmarg']] = margins[3]
 			vec[treed['linenum']] = line_num
 			vec[treed['lines_remaining']] = len(lines)-line_num
-			vec[treed['pnoun']] = pnoun
+			vec[treed['pnoun']] = pnouns
 			vec[treed['nums']] = nums
 			# vec[treed['pnoun']] = pos[0]
 			# vec[treed['nums']] = pos[1]

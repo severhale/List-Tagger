@@ -19,6 +19,10 @@ if os.path.dirname(out_name)!='' and not os.path.exists(os.path.dirname(out_name
 
 freq_dict = pickle.load(open('worddict.p', 'rb'))
 
+## clear output file
+with open(out_name, 'w') as f:
+	pass
+
 book_counter = 0
 start_time = time.time()
 books = []
@@ -28,7 +32,7 @@ for book_file in books:
 	try:
 		pages = list(get_pg_iterator(book_file))
 		tags, data = easy_feature_table(0, pages, freq_dict)
-		save_data(data, tags, out_name)
+		save_data(data, tags, out_name, 'a')
 		book_counter += 1
 		print "Book count is %d after %.2f minutes" % (book_counter, (time.time() - start_time)/60)
 	except Exception as ex:
