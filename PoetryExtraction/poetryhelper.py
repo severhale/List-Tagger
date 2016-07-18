@@ -11,6 +11,8 @@ import sklearn.metrics
 import itertools
 from scipy.stats import scoreatpercentile
 from scipy.stats import nanmedian
+from sklearn.cross_validation import LabelKFold
+from sklearn.cross_validation import cross_val_score
 from sklearn.feature_selection import RFE
 
 classes = ['0', '1', '2', '3']
@@ -92,9 +94,11 @@ classes = ['0', '1', '2', '3']
 f_context = ['prob', 'syl', 'lmarg', 'rmarg', 'tmarg', 'bmarg', 'pnoun', 'nums', 'cap']
 # features that do not need to be taken from surrounding lines
 f_line = ['linenum', 'cap_lines', 'lines_remaining', 'plength', 'mean_line_length', 'std_line_length', 'mean_lmarg', 'std_lmarg', 'mean_rmarg', 'std_rmarg']
+f_combine = ['lmarg_diff', 'rmarg_diff']
 
 treed = {f_context[i]:i for i in range(len(f_context))}
 treed.update({f_line[i]:i+len(f_context) for i in range(len(f_line))})
+treed.update({f_combine[i]:i+len(treed) for i in range(len(f_combine))})
 # invcrfd = {v:k for k,v in crfd.items()}
 invtreed = {v:k for k,v in treed.items()}
 
@@ -317,12 +321,12 @@ def get_line_dims(lines, pg_dim):
 	return line_dims
 
 def get_feature_names(n):
-	fnames = [invtreed[i] for i in range(len(invtreed))]
+	fnames = f_context + f_line
 	for i in range(n):
-		for name in f_context:
+		for name in f_context + f_combine:
 			fnames.append("%s%dp" % (name, n-i))
 	for i in range(1, n+1):
-		for name in f_context:
+		for name in f_context + f_combine:
 			fnames.append("%s%dn" % (name, i))
 	return {fnames[i]:i for i in range(len(fnames))}
 
@@ -335,7 +339,7 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 	return get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum)
 
 def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum):
-	vec = [0] * len(treed)
+	vec = [0] * len(f_context) + len(f_line)
 	got_vec = False
 	if line_num < len(lines) and line_num >= 0:
 		line = lines[line_num]
@@ -460,10 +464,14 @@ def make_feature_vecs(n, vecs, targets=None):
 # make a feature vector building off of vec with previous and next feature vectors
 def make_feature_vec(vec, pvecs, nvecs):
 	v = vec[:]
-	for pvec in pvecs:
-		v += [pvec[treed[fname]] for fname in f_context]
-	for nvec in nvecs:
-		v += [nvec[treed[fname]] for fname in f_context]
+	for ovec in pvecs + nvecs:
+		for fname in f_context:
+			v.append(ovec[treed[fname]])
+		for fname in f_combine:
+			if fname == 'lmarg_diff':
+				v.append(vec[treed['lmarg']] - ovec[treed['lmarg']])
+			elif fname == 'rmarg_diff':
+				v.append(vec[treed['rmarg']] - ovec[treed['rmarg']])
 	return v
 
 # def get_crf_data(tree_guesses, X1, names, pages):
@@ -921,12 +929,10 @@ def test(XL, YL, XT, YT, feature_names):
 		XL, XT, feature_names = subtest(XL, YL, XT, YT, feature_names)
 
 def cvtest(n, model, X, Y, names):
-	results = []
-	for i in range(n):
-		XL, XT, YL, YT, NL, NT = split_books(X, Y, names)
-		model.fit(XL, YL)
-		results.append(sklearn.metrics.f1_score(YT, model.predict(XT), average='binary', pos_label=2))
-	return results
+	scorer = sklearn.metrics.make_scorer(lambda x,y:sklearn.metrics.f1_score(x,y,average='binary', pos_label=2))
+	labels = [l[0] for l in map(parse_tag, names)]
+	lkf = LabelKFold(labels, n_folds=n)
+	return cross_val_score(model, X, Y, scoring=scorer, cv=lkf)
 
 # perform leave one out on each book and return a list of models
 # and a list of their respective f1 scores
