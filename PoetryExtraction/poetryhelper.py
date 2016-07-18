@@ -15,42 +15,42 @@ from sklearn.feature_selection import RFE
 
 classes = ['0', '1', '2', '3']
 
-crfd = {
-	'syl_c':0, # int
-	'syl_pc':1, # bool
-	'syl_cn':2, # bool
-	'prob_c':3, # int
-	'lmarg_c':4, # float.1
-	'lmarg_pc':5, # bool
-	'lmarg_cn':6, # bool
-	'rmarg_c':7, # float.1
-	'rmarg_pc':8, # bool
-	'rmarg_cn':9, # bool
-	'line1':10, # [0,1]
-	'line2':11, # [0,1]
-	'capital_c':12, # bool
-	'rf_c':13, # [0,1]
-	'rf_pc':14, # [0,1]-[0,1]
-	'rf_cn':15, # [0,1]-[0,1]
-	'lmarg_pn':16,
-	'rmarg_pn':17,
-	'syl_pn':18,
-	'tmarg_c':19,
-	'tmarg_p':20,
-	'bmarg_c':21,
-	'bmarg_n':22,
-	'tbmarg_c':23,
-	'tmarg-line_c':24,
-	'capital_cn':25,
-	'capital_pc':26,
-	'capital_pn':27,
-	'repetition_pc':28,
-	'repetition_cn':29,
-	'repetition_pn':30,
-	'capital_cn-lmarg_cn':31, # bool-bool-[-1,0,1]
-	'lines_remaining':32, # int
-	'punc_end':33, # bool
-}
+# crfd = {
+# 	'syl_c':0, # int
+# 	'syl_pc':1, # bool
+# 	'syl_cn':2, # bool
+# 	'prob_c':3, # int
+# 	'lmarg_c':4, # float.1
+# 	'lmarg_pc':5, # bool
+# 	'lmarg_cn':6, # bool
+# 	'rmarg_c':7, # float.1
+# 	'rmarg_pc':8, # bool
+# 	'rmarg_cn':9, # bool
+# 	'line1':10, # [0,1]
+# 	'line2':11, # [0,1]
+# 	'capital_c':12, # bool
+# 	'rf_c':13, # [0,1]
+# 	'rf_pc':14, # [0,1]-[0,1]
+# 	'rf_cn':15, # [0,1]-[0,1]
+# 	'lmarg_pn':16,
+# 	'rmarg_pn':17,
+# 	'syl_pn':18,
+# 	'tmarg_c':19,
+# 	'tmarg_p':20,
+# 	'bmarg_c':21,
+# 	'bmarg_n':22,
+# 	'tbmarg_c':23,
+# 	'tmarg-line_c':24,
+# 	'capital_cn':25,
+# 	'capital_pc':26,
+# 	'capital_pn':27,
+# 	'repetition_pc':28,
+# 	'repetition_cn':29,
+# 	'repetition_pn':30,
+# 	'capital_cn-lmarg_cn':31, # bool-bool-[-1,0,1]
+# 	'lines_remaining':32, # int
+# 	'punc_end':33, # bool
+# }
 
 # treed = {
 # 	'syl_c':0, # int
@@ -89,7 +89,7 @@ crfd = {
 # }
 
 # features that should be taken from surrounding lines
-f_context = ['prob', 'syl', 'lmarg', 'rmarg', 'tmarg', 'bmarg', 'pnoun', 'nums', 'adj', 'det', 'cap']
+f_context = ['prob', 'syl', 'lmarg', 'rmarg', 'tmarg', 'bmarg', 'pnoun', 'nums', 'cap']
 # features that do not need to be taken from surrounding lines
 f_line = ['linenum', 'cap_lines', 'lines_remaining', 'plength', 'mean_line_length', 'std_line_length', 'mean_lmarg', 'std_lmarg', 'mean_rmarg', 'std_rmarg']
 
@@ -317,7 +317,7 @@ def get_line_dims(lines, pg_dim):
 	return line_dims
 
 def get_feature_names(n):
-	fnames = treed.keys()
+	fnames = [invtreed[i] for i in range(len(invtreed))]
 	for i in range(n):
 		for name in f_context:
 			fnames.append("%s%dp" % (name, n-i))
@@ -373,7 +373,16 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 			para = parent_map[line]
 			plength = len(para.findall(".//WORD"))
 			margins = [l_margin/pg_dim[0], r_margin/pg_dim[0], t_margin/pg_dim[1], b_margin/pg_dim[1], syllables, plength]
-			pos = pos_count(line)
+			# pos = pos_count(line)
+			pnouns = sum(i.text.istitle() for i in line)/len(line)
+			nchars = 0
+			nums = 0
+			for word in line:
+				for c in word.text:
+					if c.isnumeric():
+						nums += 1
+					nchars += 1
+			nums /= nchars
 			first_words = []
 			paralines = para.findall(".//LINE")
 			for l in paralines:
@@ -389,10 +398,12 @@ def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num,
 			vec[treed['bmarg']] = margins[3]
 			vec[treed['linenum']] = line_num
 			vec[treed['lines_remaining']] = len(lines)-line_num
-			vec[treed['pnoun']] = pos[0]
-			vec[treed['nums']] = pos[1]
-			vec[treed['adj']] = pos[2]
-			vec[treed['det']] = pos[3]
+			vec[treed['pnoun']] = pnoun
+			vec[treed['nums']] = nums
+			# vec[treed['pnoun']] = pos[0]
+			# vec[treed['nums']] = pos[1]
+			# vec[treed['adj']] = pos[2]
+			# vec[treed['det']] = pos[3]
 			vec[treed['plength']] = plength
 			vec[treed['cap_lines']] = sum(i[0].istitle() for i in first_words)/len(paralines)
 			vec[treed['cap']] = 1 if line[0].text.istitle() else 0
@@ -436,7 +447,6 @@ def get_feature_vec(n, parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
 	return make_feature_vec(vec, pvecs, nvecs)
 
 def make_feature_vecs(n, vecs, targets=None):
-	print targets
 	results = []
 	if targets is None:
 		targets = range(len(vecs))
@@ -915,7 +925,7 @@ def cvtest(n, model, X, Y, names):
 	for i in range(n):
 		XL, XT, YL, YT, NL, NT = split_books(X, Y, names)
 		model.fit(XL, YL)
-		results.append(sklearn.metrics.f1_score(YT, model.predict(XT), average=None)[1])
+		results.append(sklearn.metrics.f1_score(YT, model.predict(XT), average='binary', pos_label=2))
 	return results
 
 # perform leave one out on each book and return a list of models

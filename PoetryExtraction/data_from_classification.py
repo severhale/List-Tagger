@@ -1,6 +1,7 @@
 import numpy as np
 import pickle
 import time
+import os
 from poetryhelper import *
 
 classification = open('classification', 'r')
@@ -17,6 +18,8 @@ count = 0
 for book in books:
 	#### get pages required
 	fname = "../All Text/" + book + "_djvu.xml"
+	if not os.path.isfile(fname):
+		fname = "../All Text/" + book + ".xml"
 	pages = list(get_pg_iterator(fname))
 	tags, data = easy_feature_table(0, pages, freq_dict)
 
@@ -50,6 +53,6 @@ for book in books:
 	# 	str_pgnum = str(pg_num).zfill(4)
 	# 	tags.append(book + '_' + str_pgnum + '_' + str(lineinfo[1]))
 
-	save_data(data, tags, 'single_feature_data', 'a')
+	save_data(data, tags, "../All Text/" + book + "_data", 'w')
 	count += 1
 	print "Book %d done after %.2f minutes" % (count, (time.time() - start)/60)
