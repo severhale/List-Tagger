@@ -339,7 +339,7 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 	return get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum)
 
 def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum):
-	vec = [0] * len(f_context) + len(f_line)
+	vec = [0] * (len(f_context) + len(f_line))
 	got_vec = False
 	if line_num < len(lines) and line_num >= 0:
 		line = lines[line_num]
@@ -646,11 +646,9 @@ def pages_from_names(names):
 	for book in np.unique(lines[:,0]):
 		pages = list(get_pg_iterator("../All Text/" + book + "_djvu.xml"))
 		pg_nums = get_page_numbers(pages)
-		last_pg_num = ''
 		while index < len(lines) and lines[index,0]==book:
 			num = pg_nums.index(lines[index,1])
 			result.append(pages[num])
-			last_pg_num = lines[index,1]
 			index += 1
 	print len(result),"pages"
 	return [result[i] for i in revinds]
