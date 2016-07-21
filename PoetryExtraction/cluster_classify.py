@@ -45,7 +45,7 @@ with (gzip.open(sys.argv[1], 'r') if sys.argv[1].endswith('.gz') else open(sys.a
 			X = []
 			tags = []
 	X = make_feature_vecs(n, X)
-	Y = clf.predict_proba(X)
+	Y = clf.predict_proba(X)[:,1]
 	with open(out_name, 'a') as out:
 		for i in range(len(Y)):
 			out.write("%s %.4f\n" % (tags[i], Y[i]))

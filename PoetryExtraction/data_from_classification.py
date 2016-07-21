@@ -16,10 +16,14 @@ books = np.unique(np.asarray(map(parse_tag, lines))[:,0])
 start = time.time()
 count = 0
 for book in books:
+	if os.path.isfile("../AllText/" + book + "_data"):
+		continue
 	#### get pages required
-	fname = "../All Text/" + book + "_djvu.xml"
+	fname = "../AllText/" + book + "_djvu.xml"
 	if not os.path.isfile(fname):
-		fname = "../All Text/" + book + ".xml"
+		fname = "../AllText/" + book + ".xml"
+	if not os.path.isfile(fname):
+		fname = "../../DownloadedText/" + book + "_djvu.xml"
 	pages = list(get_pg_iterator(fname))
 	tags, data = easy_feature_table(0, pages, freq_dict)
 
@@ -53,6 +57,6 @@ for book in books:
 	# 	str_pgnum = str(pg_num).zfill(4)
 	# 	tags.append(book + '_' + str_pgnum + '_' + str(lineinfo[1]))
 
-	save_data(data, tags, "../All Text/" + book + "_data", 'w')
+	save_data(data, tags, "../AllText/" + book + "_data", 'w')
 	count += 1
 	print "Book %d done after %.2f minutes" % (count, (time.time() - start)/60)

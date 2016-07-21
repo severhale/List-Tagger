@@ -13,7 +13,7 @@ with open('training_data', 'w') as f:
 	pass
 
 for book in np.unique(books):
-	fname = "../All Text/" + book + "_data"
+	fname = "../AllText/" + book + "_data"
 	data = np.loadtxt(fname, dtype='string')
 	names = data[:,0]
 	X = data[:,1:]
