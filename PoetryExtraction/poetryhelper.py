@@ -926,8 +926,9 @@ def test(XL, YL, XT, YT, feature_names):
 	while XL.shape[1]>0:
 		XL, XT, feature_names = subtest(XL, YL, XT, YT, feature_names)
 
-def cvtest(n, model, X, Y, names):
-	scorer = sklearn.metrics.make_scorer(lambda x,y:sklearn.metrics.f1_score(x,y,average='binary', pos_label=2))
+def cvtest(n, model, X, Y, names, scorer=None):
+	if scorer is None:
+		scorer = sklearn.metrics.make_scorer(lambda x,y:sklearn.metrics.f1_score(x,y,average='binary', pos_label=2))
 	labels = [l[0] for l in map(parse_tag, names)]
 	lkf = LabelKFold(labels, n_folds=n)
 	return cross_val_score(model, X, Y, scoring=scorer, cv=lkf)
