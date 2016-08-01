@@ -1,3 +1,7 @@
+## cluster_classify.py
+## Usage: python cluster_classify.py <input_file> <output_file>
+## Given a feature vector file <input_file>, classify each line and output to <output_file>
+
 import sys
 import pickle
 import gzip

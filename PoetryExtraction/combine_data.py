@@ -1,7 +1,14 @@
+## combiner_data.py
+## This script loads classification data ('classification') and files containing all line data for each book in the classification data.
+## It creates a final feature file for each line in the classification file.
+## Data files are expected to be in the format '<data_folder>/<book>_data'
+## n determines the number of context lines on each side of a line when creating feature vectors
+
 import numpy as np
 from poetryhelper import *
 
 n=5
+data_folder = '../AllText'
 
 fname = 'classification'
 classification = np.loadtxt(fname, dtype='string')
@@ -13,7 +20,7 @@ with open('training_data', 'w') as f:
 	pass
 
 for book in np.unique(books):
-	fname = "../AllText/" + book + "_data"
+	fname = data_folder + '/' + book + "_data"
 	data = np.loadtxt(fname, dtype='string')
 	names = data[:,0]
 	X = data[:,1:]

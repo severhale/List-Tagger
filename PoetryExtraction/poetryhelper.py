@@ -5,12 +5,11 @@ import nltk
 import copy
 import string
 import math
+import os
 import random
 import operator
 import sklearn.metrics
 import itertools
-from scipy.stats import scoreatpercentile
-from scipy.stats import nanmedian
 from sklearn.cross_validation import LabelKFold
 from sklearn.cross_validation import cross_val_score
 from sklearn.feature_selection import RFE
@@ -54,52 +53,16 @@ classes = ['0', '1', '2', '3']
 # 	'punc_end':33, # bool
 # }
 
-# treed = {
-# 	'syl_c':0, # int
-# 	'syl_p':1, # int
-# 	'syl_n':2, # int
-# 	'prob_c':3, # float
-# 	'lmarg_c':4, # float
-# 	'lmarg_p':5, # float
-# 	'lmarg_n':6, # float
-# 	'rmarg_c':7, # float
-# 	'rmarg_p':8, # float
-# 	'rmarg_n':9, # float
-# 	'tmarg_c':10, # float
-# 	'tmarg_p':11, # float
-# 	'tmarg_n':12, # float
-# 	'bmarg_c':13, # float
-# 	'bmarg_p':14, # float
-# 	'bmarg_n':15, # float
-# 	'linenum':16, # int
-# 	'pnoun':17, # float
-# 	'nums':18, # float
-# 	'plength':19,
-# 	'cap_lines':20,
-# 	'adj':21,
-# 	'det':22,
-# 	'cap_c':23,
-# 	'cap_p':24,
-# 	'cap_n':25,
-# 	'lines_remaining':26,
-# 	'mean_line_length':27,
-# 	'std_line_length':28,
-# 	'mean_lmarg':29,
-# 	'std_lmarg':30,
-# 	'mean_rmarg':31,
-# 	'std_rmarg':32,
-# }
-
 # features that should be taken from surrounding lines
 f_context = ['prob', 'syl', 'lmarg', 'rmarg', 'tmarg', 'bmarg', 'pnoun', 'nums', 'cap']
 # features that do not need to be taken from surrounding lines
 f_line = ['linenum', 'cap_lines', 'lines_remaining', 'plength', 'mean_line_length', 'std_line_length', 'mean_lmarg', 'std_lmarg', 'mean_rmarg', 'std_rmarg']
+# features that are created by combining features from surrounding lines but not included in f_line or f_context
 f_combine = ['lmarg_diff', 'rmarg_diff']
 
 treed = {f_context[i]:i for i in range(len(f_context))}
 treed.update({f_line[i]:i+len(f_context) for i in range(len(f_line))})
 treed.update({f_combine[i]:i+len(treed) for i in range(len(f_combine))})
-# invcrfd = {v:k for k,v in crfd.items()}
 invtreed = {v:k for k,v in treed.items()}
 
 words = nltk.corpus.cmudict.dict()
@@ -240,7 +203,9 @@ def pos_count(line):
 def get_parent_map(pages):
 	return {c:p for page in pages for p in page.iter() for c in p}
 
+### USE THIS TO GET ALL DATA FOR A BOOK ###
 # Get numpy table with all data for all pages, include n previous and n next feature vecs in each vec
+# freq_dict is the language model which likely needs to be unpickled from a file
 def easy_feature_table(n, pages, freq_dict):
 	parent_map = get_parent_map(pages)
 	dict_sum = sum(freq_dict.itervalues())
@@ -248,6 +213,7 @@ def easy_feature_table(n, pages, freq_dict):
 	return tags, data
 
 # Get a numpy table containing all feature vectors of all lines on all pages
+# To get parent_map, use get_parent_map(pages)
 def get_feature_table(n, parent_map, pages, freq_dict, dict_sum):
 	tags, data = get_single_feature_table(parent_map, pages, freq_dict, dict_sum)
 	if n > 0:
@@ -311,6 +277,7 @@ def get_feature_vec_pg(n, parent_map, pages, page_index, line_num, freq_dict, di
 	result = get_feature_vec(n, parent_map, prev_lines+lines+next_lines, line_num+len(prev_lines), pg_dim, freq_dict, dict_sum)
 	return result
 
+# Get the bounding boxes of a set of lines
 def get_line_dims(lines, pg_dim):
 	line_dims = []
 	for line in lines:
@@ -320,6 +287,7 @@ def get_line_dims(lines, pg_dim):
 			line_dims.append((pg_dim[0]/2, pg_dim[1]/2, pg_dim[0]/2, pg_dim[1]/2))
 	return line_dims
 
+# Build a dictionary of feature names and their indices in a feature vector
 def get_feature_names(n):
 	fnames = f_context + f_line
 	for i in range(n):
@@ -338,6 +306,7 @@ def get_single_feature_vec(parent_map, lines, line_num, pg_dim, freq_dict, dict_
 	# prob = sum(get_probability(line, freq_dict, dict_sum) for line in lines)
 	return get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum)
 
+# Optimized single feature vector method. Preferable over get_single_feature_vec for the 3x performance increase
 def get_fvec_precomp(parent_map, line_dims, lmargins, rmargins, lines, line_num, pg_dim, freq_dict, dict_sum):
 	vec = [0] * (len(f_context) + len(f_line))
 	got_vec = False
@@ -431,25 +400,10 @@ def get_feature_vec(n, parent_map, lines, line_num, pg_dim, freq_dict, dict_sum)
 		pvecs.append(get_single_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
 	for i in range(line_num+1, line_num+n+1):
 		pvecs.append(get_single_feature_vec(parent_map, lines, i, pg_dim, freq_dict, dict_sum))
-	# prev_word = ''
-	# next_word = ''
-	# curr_word = ''
-	# if line_num > 0:
-	# 	if len(lines[line_num-1])>0:
-	# 		prev_word = lines[line_num-1][0].text
-	# 	pvec = get_single_feature_vec(parent_map, lines, line_num-1, pg_dim, freq_dict, dict_sum)
-	# if line_num < len(lines)-1:
-	# 	if len(lines[line_num+1])>0:
-	# 		next_word = lines[line_num+1][0].text
-	# 	nvec = get_single_feature_vec(parent_map, lines, line_num+1, pg_dim, freq_dict, dict_sum)
-	# if len(lines[line_num])>0:
-	# 		prev_word = lines[line_num][0].text
-	# if pvec == None:
-	# 	pvec = vec
-	# if nvec == None:
-	# 	nvec = vec
 	return make_feature_vec(vec, pvecs, nvecs)
 
+# Given a set of single feature vectors for each line, combine to create full feature vectors including n*2 neighbors' context
+# If specified, targets contains the indices of lines in vecs that should be returned after their vectors are computed
 def make_feature_vecs(n, vecs, targets=None):
 	results = []
 	if targets is None:
@@ -462,6 +416,7 @@ def make_feature_vecs(n, vecs, targets=None):
 	return results
 
 # make a feature vector building off of vec with previous and next feature vectors
+# vec is an array, pvecs and nvecs are arrays of arrays
 def make_feature_vec(vec, pvecs, nvecs):
 	v = vec[:]
 	for ovec in pvecs + nvecs:
@@ -474,6 +429,7 @@ def make_feature_vec(vec, pvecs, nvecs):
 				v.append(vec[treed['rmarg']] - ovec[treed['rmarg']])
 	return v
 
+# Gross outdated function for converting data into simpler crf features. Completely useless but it's just so giant I can't bring myself to delete it just yet.
 # def get_crf_data(tree_guesses, X1, names, pages):
 # 	X = []
 # 	for i in range(len(X1)):
@@ -563,7 +519,8 @@ def make_feature_vec(vec, pvecs, nvecs):
 # 			X[i][j] = make_dict(vec)
 # 	return X
 
-# Find the log-product probability that a line fits the language model contained in freq_dict. dict_sum is the sum of all frequencies of words in the model
+# Find the log-sum probability that a line fits the language model contained in freq_dict. dict_sum is the sum of all frequencies of words in the model
+# line is an XML object, not the actual text
 def get_probability(line, freq_dict, dict_sum):
 	text = get_line_text(line)
 	eps = .01
@@ -634,6 +591,7 @@ def check_adjacent(pg_num1, line1, pg_num2, line2, prev_page):
 		else:
 			return False
 
+# Get an array of page objects where the page at index i is the XML object which the ith element of names corresponds to
 def pages_from_names(names):
 	result = []
 	lines = np.asarray(map(parse_tag, names))
@@ -644,7 +602,12 @@ def pages_from_names(names):
 	print len(lines),"lines"
 	index = 0
 	for book in np.unique(lines[:,0]):
-		pages = list(get_pg_iterator("../All Text/" + book + "_djvu.xml"))
+		fname = "../AllText/" + book + "_djvu.xml"
+		if not os.path.isfile(fname):
+			fname = "../AllText/" + book + ".xml"
+		if not os.path.isfile(fname):
+			fname = "../../DownloadedText/" + book + "_djvu.xml"
+		pages = list(get_pg_iterator(fname))
 		pg_nums = get_page_numbers(pages)
 		while index < len(lines) and lines[index,0]==book:
 			num = pg_nums.index(lines[index,1])
@@ -653,6 +616,9 @@ def pages_from_names(names):
 	print len(result),"pages"
 	return [result[i] for i in revinds]
 
+########################################################################
+##############               BEGIN CRF CODE               ##############
+########################################################################
 # Make X into a list of lists of dicts containing feature data
 # Y is a list of lists of truth data
 # Names is a list of lists of names
@@ -712,51 +678,57 @@ def pages_from_names(names):
 # 	return X1, Y1, names1, pages1
 
 # Takes a dict and returns its values in the order specified in crfd
-def flatten(d):
-	order = sorted(crfd.items(), key=operator.itemgetter(1))
-	return [d[i[0]] for i in order]
+# def flatten(d):
+# 	order = sorted(crfd.items(), key=operator.itemgetter(1))
+# 	return [d[i[0]] for i in order]
 
 # Flattens data in crf format to sklearn-compatible arrays
-def uncrfformat(cX, cY, cnames):
-	X = lsum(cX)
-	Y = lsum(cY)
-	names = lsum(cnames)
-	return np.asarray(X), np.asarray(Y), names
+# def uncrfformat(cX, cY, cnames):
+# 	X = lsum(cX)
+# 	Y = lsum(cY)
+# 	names = lsum(cnames)
+# 	return np.asarray(X), np.asarray(Y), names
 
 # Turn a list of features into a dict from feature name to value
-def make_dict(feature_vec):
-	return {invcrfd[i]:feature_vec[i] for i in range(len(feature_vec))}
+# def make_dict(feature_vec):
+# 	return {invcrfd[i]:feature_vec[i] for i in range(len(feature_vec))}
 
-def splitcrf(X, Y, names, pages, test_percentage, state=None):
-	random.seed(state)
-	num_lines = sum(len(x) for x in X)
-	line_count = 0
-	Xlearn = X[:]
-	Ylearn = Y[:]
-	Nlearn = names[:]
-	Plearn = pages[:]
-	Xtest = []
-	Ytest = []
-	Ntest = []
-	Ptest = []
-	while line_count < test_percentage * num_lines:
-		ind = random.randint(0, len(Xlearn) - 1)
-		Xtest.append(Xlearn.pop(ind))
-		Ytest.append(Ylearn.pop(ind))
-		Ntest.append(Nlearn.pop(ind))
-		Ptest.append(Plearn.pop(ind))
-		line_count += len(Xtest[-1])
-	return Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest
+# Outdated function for splitting data for crf usage
+# def splitcrf(X, Y, names, pages, test_percentage, state=None):
+# 	random.seed(state)
+# 	num_lines = sum(len(x) for x in X)
+# 	line_count = 0
+# 	Xlearn = X[:]
+# 	Ylearn = Y[:]
+# 	Nlearn = names[:]
+# 	Plearn = pages[:]
+# 	Xtest = []
+# 	Ytest = []
+# 	Ntest = []
+# 	Ptest = []
+# 	while line_count < test_percentage * num_lines:
+# 		ind = random.randint(0, len(Xlearn) - 1)
+# 		Xtest.append(Xlearn.pop(ind))
+# 		Ytest.append(Ylearn.pop(ind))
+# 		Ntest.append(Nlearn.pop(ind))
+# 		Ptest.append(Plearn.pop(ind))
+# 		line_count += len(Xtest[-1])
+# 	return Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest, Plearn, Ptest
+########################################################################
+##############                END CRF CODE                ##############
+########################################################################
 
 # return all indices where the true value was truth but prediction was predicted
 def where_predicted(flat_ytest, flat_yhat, truth, prediction):
 	return np.where((np.asarray(flat_ytest)==truth) & (np.asarray(flat_yhat)==prediction))[0]
 
+# Print the text of lines specified by names where pages[i] contains the line names[i]
 def print_lines(names, pages):
 	lines = [int(i.split('_')[-1]) for i in names]
 	for i in range(len(lines)):
 		print names[i]+": "+get_line_text(get_line(pages[i], lines[i]))
 
+# Print tags where the true value was truth but the predicted value was prediction
 def print_mistakes(Ytest, Yhat, names, pages, truth, prediction):
 	yt = lsum(Ytest)
 	yh = lsum(Yhat)
@@ -856,6 +828,8 @@ def get_poems(poems, names, pages):
 			results[-1] += "%s\n" % (get_line_text(get_line(pages[i], linenum)))
 	return results
 
+# Print best guess at poems found in output data Y.
+# Tolerance determines number of consecutive non-poetry lines before a poem is declared done.
 def print_poems(Y, names, pages, tolerance):
 	results = ""
 	poems = guess_poem_indices(Y, names, tolerance)
@@ -868,7 +842,7 @@ def print_poems(Y, names, pages, tolerance):
 	return results
 
 # p: Proabability from 0 to 1 that truth data is replaced with noise
-def simulate_data(p):
+def simulate_data(p, Ylearn, Ytest, Ydev):
 	learnguesses = [y[:] for y in Ylearn]
 	testguesses = [y[:] for y in Ytest]
 	devguesses = [y[:] for y in Ydev]
@@ -881,11 +855,13 @@ def simulate_data(p):
 						guesses[i][j]='2'
 	return learnguesses, testguesses, devguesses
 
+# Get feature importances from random forest classifier tree
 def feature_importances(tree):
 	imp = tree.feature_importances_
 	feature_names = map(operator.itemgetter(0), sorted(treed.items(), key=operator.itemgetter(1)))
 	return np.asarray(sorted(zip(feature_names, imp), key=operator.itemgetter(1)))
 
+# Create train-test split by splitting on books
 def split_books(X, Y, names, test_percent=.2):
 	Xlearn = X[:]
 	Ylearn = Y[:]
@@ -909,6 +885,7 @@ def split_books(X, Y, names, test_percent=.2):
 		line_count += sum(mask)
 	return Xlearn, Xtest, Ylearn, Ytest, Nlearn, Ntest
 
+# Recursive feature elemination test
 def subtest(model, XL, YL, XT, YT, feature_names):
 	nfeatures = XL.shape[1]
 	rfe = RFE(model, nfeatures-1)
@@ -922,10 +899,12 @@ def subtest(model, XL, YL, XT, YT, feature_names):
 	print ""
 	return rfe.transform(XL), rfe.transform(XT), feature_names[rfe.support_]
 
-def test(XL, YL, XT, YT, feature_names):
+# Removes worst feature iteratively until no features remain, testing after each removal.
+def iterative_test(XL, YL, XT, YT, feature_names):
 	while XL.shape[1]>0:
 		XL, XT, feature_names = subtest(XL, YL, XT, YT, feature_names)
 
+# Perform n-fold crossvalidation of model.
 def cvtest(n, model, X, Y, names, scorer=None):
 	if scorer is None:
 		scorer = sklearn.metrics.make_scorer(lambda x,y:sklearn.metrics.f1_score(x,y,average='binary', pos_label=2))
@@ -956,14 +935,3 @@ def loo_validation_model(model, X, Y, names):
 		clf.estimators_ += classifiers[i].estimators_
 		clf.n_estimators = len(clf.estimators_)
 	return clf
-
-def fivenum(v):
-    v = np.array(v)
-    try:
-        np.sum(v)
-    except TypeError:
-        print('Error: you must provide a list or array of only numbers')
-    q1 = scoreatpercentile(v[~np.isnan(v)],25)
-    q3 = scoreatpercentile(v[~np.isnan(v)],75)
-    md = nanmedian(v)
-    return np.nanmin(v), q1, md, q3, np.nanmax(v),

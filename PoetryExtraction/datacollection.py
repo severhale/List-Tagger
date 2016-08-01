@@ -1,3 +1,6 @@
+## datacollection.py
+## A failed attempt at visualizing text layout for easier classifiction
+
 import PIL.Image
 import PIL.ImageDraw
 import PIL.ImageFont

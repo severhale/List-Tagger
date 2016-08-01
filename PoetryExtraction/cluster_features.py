@@ -1,3 +1,8 @@
+## cluster_features.py
+## Gather single line feature data for entire books
+## usage: python cluster_features.py <input> <output>
+## <input> is a file containing a filename on each line from which feature data will be gathered
+
 import sys
 import pickle
 import time

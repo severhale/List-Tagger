@@ -1,4 +1,6 @@
 #!/bin/bash
+# This script combines classification and training_data into an svmlight-fomat file, joined_data
+
 rm -f joined_data
 LANG=en_EN sort classification > classification_tmp
 LANG=en_EN sort training_data > training_data_tmp

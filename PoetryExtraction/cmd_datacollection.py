@@ -1,3 +1,9 @@
+## cmd_datacollection.py
+## A command line interface for annotating data
+## Usage: python cmd_datacollection.py <filename> [<startpage> [<endpage>]]
+## startpage and endpage optional, can't have endpage without a startpage.
+## If left out, use entire book.
+
 import poetryhelper
 import curses
 import sys
@@ -12,16 +18,19 @@ statedict = {
 	'a':5
 }
 
+# Format classification into a string to be used in the classification file
 def classify_line(book_name, pg_num, line_num, state):
 	return "%s_%s_%s %d\n" % (book_name, pg_num, line_num, state)
 
+# Append list of strings to classification file
 def write_data(data):
 	f = open('classification', 'a')
 	for line in data:
 		f.write(line)
 	f.close()
 
-def doStuff(stdscr, pages, pg_nums, name):
+# Wrapper function for annotating to be used within curses window
+def gather(stdscr, pages, pg_nums, name):
 	i=0
 	data = []
 	while i < len(pg_nums):
@@ -29,10 +38,8 @@ def doStuff(stdscr, pages, pg_nums, name):
 			write_data(data)
 			data = []
 		lines = poetryhelper.get_all_lines(pages[i])
-		pg_dim = poetryhelper.get_page_dimensions(pages[i])
+		# pg_dim = poetryhelper.get_page_dimensions(pages[i])
 		num = pg_nums[i]
-		# url = "http://www.archive.org/download/%s/page/n%d.jpg" % (name, int(num))
-		# webbrowser.open(url)
 		j=0
 		while j < len(lines):
 			stdscr.clear()
@@ -53,12 +60,12 @@ def doStuff(stdscr, pages, pg_nums, name):
 					while i>0 and not foundline:
 						i -= 1
 						newlines = poetryhelper.get_all_lines(pages[i])
-						newpg_dim = poetryhelper.get_page_dimensions(pages[i])
+						# newpg_dim = poetryhelper.get_page_dimensions(pages[i])
 						newnum = pg_nums[i]
 						j = len(newlines) - 1
 						if len(newlines)>0:
 							foundline = True
-							pg_dim = newpg_dim
+							# pg_dim = newpg_dim
 							lines = newlines
 							num = newnum
 					if not foundline: # first line in the book at oldi, oldj
@@ -80,6 +87,7 @@ def doStuff(stdscr, pages, pg_nums, name):
 			j += 1
 		i += 1
 	write_data(data)
+
 
 # fname = raw_input("Enter file name: ")
 # pg_start = int(raw_input("Enter start page: "))
@@ -107,4 +115,4 @@ print "<space>:\tnon-poem"
 print "<backspace>:\treclassify last line"
 print "<other key>:\tskip current line"
 raw_input("Press enter when you're ready to begin.")
-curses.wrapper(doStuff, pages, pg_nums, name)
+curses.wrapper(gather, pages, pg_nums, name)
