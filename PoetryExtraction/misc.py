@@ -177,8 +177,24 @@ NEIGHBORS FROM 0 to 9
 [ 0.89151922,  0.90499038,  0.90809055,  0.90966025,  0.90959273,
   0.9099101 ,  0.9084678 ,  0.90769665,  0.90826293,  0.90439632]
 
+
+########## CODE FOR COMPLETING ANNOTATED PAGES
+# to fill in the gaps in partially-annotated pages
 import numpy as np
 from poetryhelper import *
+
+# Format classification into a string to be used in the classification file
+def classify_line(book_name, pg_num, line_num, state):
+	return "%s_%s_%s %d\n" % (book_name, pg_num, line_num, state)
+
+# Append list of strings to classification file
+def write_data(data):
+	f = open('classification', 'a')
+	for line in data:
+		f.write(line)
+	f.close()
+
+
 with open('classification', 'r') as f:
 	lines = f.readlines()
 lines = np.asarray([parse_tag(l.split()[0]) for l in lines])
@@ -187,7 +203,7 @@ pglines = np.asarray([p+'_0' for p in pgs])
 pages = pages_from_names(pglines)
 
 d = {
-	' ':0
+	' ':0,
 	'w':1,
 	'e':2,
 	'r':3,
@@ -195,7 +211,7 @@ d = {
 	'a':5,
 }
 
-missing = []
+results = []
 # try:
 for i in range(len(pages)):
 	book,page = parse_tag(pglines[i])[:2]
@@ -203,11 +219,20 @@ for i in range(len(pages)):
 	classified = np.vectorize(int)(classified)
 	actual = get_all_lines(pages[i])
 	if len(actual)-len(classified) != 0:
-		missing = [i for in range(len(actual)) if i not in classified]
-		for i in missing:
-			line = get_line_text(actual[i])
-			c = raw_input(line)
-
-		missing += [book+'_'+page+'_'+"%d" % i for i in range(actual) if i not in classified]
+		missing = [j for j in range(len(actual)) if j not in classified]
+		for j in missing:
+			line = get_line_text(actual[j])
+			c = raw_input("%s_%s_%d: %s " % (book, page, j, line))
+			if c in d:
+				s = d[c]
+			else:
+				s = 0
+			results.append(classify_line(book, page, j, s))
+write_data(results)
+		# missing += [book+'_'+page+'_'+"%d" % i for i in range(actual) if i not in classified]
 # except:
 # 	print "Problem. Exiting loop."
+##################### END ANNOTATING CODE
+
+
+mistakes:
