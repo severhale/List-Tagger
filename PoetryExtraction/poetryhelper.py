@@ -935,3 +935,9 @@ def loo_validation_model(model, X, Y, names):
 		clf.estimators_ += classifiers[i].estimators_
 		clf.n_estimators = len(clf.estimators_)
 	return clf
+
+# Upsample poetry to balance data
+def upsample(X, Y, names):
+	inds = np.random.choice(np.where(Y==2)[0], sum(Y==0)-sum(Y==2))
+	inds = np.hstack((np.where(Y==0)[0], np.where(Y==2)[0], inds))
+	return X[inds], Y[inds], names[inds]
